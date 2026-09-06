@@ -56,9 +56,9 @@ private fun AppRoot(viewModel: PlayerViewModel) {
             bassBoostStrength = state.bassBoostStrength,
             onDismiss = { showEqualizer = false },
             onEqualizerEnabledChange = { viewModel.setEqualizerEnabled(it) },
-            onBandChange = { index, level -> viewModel.setEqualizerBand(index, level) },
-            onBassBoostEnabledChange = { viewModel.setBassBoostEnabled(it) },
-            onBassBoostStrengthChange = { viewModel.setBassBoostStrength(it) }
+            onBandChange = { index: Int, level: Int -> viewModel.setEqualizerBand(index, level) },
+onBassBoostEnabledChange = { enabled: Boolean -> viewModel.setBassBoostEnabled(enabled) },
+onBassBoostStrengthChange = { strength: Int -> viewModel.setBassBoostStrength(strength) }
         )
     }
 }
