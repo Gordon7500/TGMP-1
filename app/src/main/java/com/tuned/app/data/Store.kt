@@ -101,38 +101,3 @@ class Store(context: Context) {
             prefs.edit().putString("tracks", arr.toString()).apply()
         }
 }
-    var tracks: List<Track>
-        get() {
-            val raw = prefs.getString("tracks", "[]") ?: "[]"
-            val arr = JSONArray(raw)
-            return (0 until arr.length()).map { i ->
-                val o = arr.getJSONObject(i)
-                Track(
-                    fileId = o.getString("fileId"),
-                    fileUniqueId = o.getString("fileUniqueId"),
-                    title = o.getString("title"),
-                    artist = o.getString("artist"),
-                    durationSec = o.optInt("durationSec", 0),
-                    thumbFileId = o.optString("thumbFileId", null.toString()).takeIf { it != "null" },
-                    sourceChat = o.optString("sourceChat", ""),
-                    dateAdded = o.optLong("dateAdded", 0L)
-                )
-            }
-        }
-        set(value) {
-            val arr = JSONArray()
-            value.forEach { t ->
-                val o = JSONObject()
-                o.put("fileId", t.fileId)
-                o.put("fileUniqueId", t.fileUniqueId)
-                o.put("title", t.title)
-                o.put("artist", t.artist)
-                o.put("durationSec", t.durationSec)
-                o.put("thumbFileId", t.thumbFileId)
-                o.put("sourceChat", t.sourceChat)
-                o.put("dateAdded", t.dateAdded)
-                arr.put(o)
-            }
-            prefs.edit().putString("tracks", arr.toString()).apply()
-        }
-}
