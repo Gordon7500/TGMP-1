@@ -1,0 +1,10 @@
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="surface">#FF0D0D0F</color>
+    <color name="violet">#FF8B5CF6</color>
+    <color name="magenta">#FFEC4899</color>
+    <color name="cyan">#FF22D3EE</color>
+    <color name="amber">#FFFBBF24</color>
+    <color name="text_primary">#FFF2F2F2</color>
+    <color name="text_muted">#FF7A7A7E</color>
+</resources>
