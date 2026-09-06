@@ -40,7 +40,7 @@ private fun AppRoot(viewModel: PlayerViewModel) {
             initialChannels = state.channels,
             initialDirectOutput = state.directOutputEnabled,
             onDismiss = { showSettings = false },
-            onSave = { token, channels, directOutput ->
+            onSave = { token: String, channels: List<String>, directOutput: Boolean ->
                 viewModel.saveSettings(token, channels, directOutput)
                 showSettings = false
             }
@@ -55,10 +55,10 @@ private fun AppRoot(viewModel: PlayerViewModel) {
             bassBoostEnabled = state.bassBoostEnabled,
             bassBoostStrength = state.bassBoostStrength,
             onDismiss = { showEqualizer = false },
-            onEqualizerEnabledChange = { viewModel.setEqualizerEnabled(it) },
+            onEqualizerEnabledChange = { enabled: Boolean -> viewModel.setEqualizerEnabled(enabled) },
             onBandChange = { index: Int, level: Int -> viewModel.setEqualizerBand(index, level) },
-onBassBoostEnabledChange = { enabled: Boolean -> viewModel.setBassBoostEnabled(enabled) },
-onBassBoostStrengthChange = { strength: Int -> viewModel.setBassBoostStrength(strength) }
+            onBassBoostEnabledChange = { enabled: Boolean -> viewModel.setBassBoostEnabled(enabled) },
+            onBassBoostStrengthChange = { strength: Int -> viewModel.setBassBoostStrength(strength) }
         )
     }
 }
