@@ -1,0 +1,28 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Five rounded bars, centered in the adaptive-icon safe zone, matching the app's palette -->
+
+    <path
+        android:fillColor="#8B5CF6"
+        android:pathData="M28,58 h9 a4.5,4.5 0 0 1 4.5,4.5 v14 a4.5,4.5 0 0 1 -4.5,4.5 h-9 a4.5,4.5 0 0 1 -4.5,-4.5 v-14 a4.5,4.5 0 0 1 4.5,-4.5 Z" />
+
+    <path
+        android:fillColor="#C4499D"
+        android:pathData="M42.5,45 h9 a4.5,4.5 0 0 1 4.5,4.5 v27 a4.5,4.5 0 0 1 -4.5,4.5 h-9 a4.5,4.5 0 0 1 -4.5,-4.5 v-27 a4.5,4.5 0 0 1 4.5,-4.5 Z" />
+
+    <path
+        android:fillColor="#EC4899"
+        android:pathData="M57,33 h9 a4.5,4.5 0 0 1 4.5,4.5 v39 a4.5,4.5 0 0 1 -4.5,4.5 h-9 a4.5,4.5 0 0 1 -4.5,-4.5 v-39 a4.5,4.5 0 0 1 4.5,-4.5 Z" />
+
+    <path
+        android:fillColor="#22D3EE"
+        android:pathData="M71.5,50 h9 a4.5,4.5 0 0 1 4.5,4.5 v22 a4.5,4.5 0 0 1 -4.5,4.5 h-9 a4.5,4.5 0 0 1 -4.5,-4.5 v-22 a4.5,4.5 0 0 1 4.5,-4.5 Z" />
+
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M86,63 h9 a4.5,4.5 0 0 1 4.5,4.5 v9 a4.5,4.5 0 0 1 -4.5,4.5 h-9 a4.5,4.5 0 0 1 -4.5,-4.5 v-9 a4.5,4.5 0 0 1 4.5,-4.5 Z" />
+</vector>
