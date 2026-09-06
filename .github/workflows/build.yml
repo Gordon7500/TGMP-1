@@ -24,6 +24,9 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Decode debug signing key
+        run: base64 -d app/tuned-debug.keystore.b64.txt > app/tuned-debug.keystore
+
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
 
