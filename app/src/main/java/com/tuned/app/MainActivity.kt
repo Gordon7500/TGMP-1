@@ -1,20 +1,35 @@
+package com.tuned.app
+
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import android.os.Bundle
 import com.tuned.app.ui.EqualizerSheet
 import com.tuned.app.ui.LibraryScreen
 import com.tuned.app.ui.PlayerBar
 import com.tuned.app.ui.SettingsSheet
 
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            AppRoot()
+        }
+    }
+}
+
 @Composable
-private fun AppRoot(viewModel: PlayerViewModel) {
+private fun AppRoot(viewModel: PlayerViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
     var showEqualizer by remember { mutableStateOf(false) }
