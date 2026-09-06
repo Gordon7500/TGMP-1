@@ -1,3 +1,18 @@
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import com.tuned.app.ui.EqualizerSheet
+import com.tuned.app.ui.LibraryScreen
+import com.tuned.app.ui.PlayerBar
+import com.tuned.app.ui.SettingsSheet
+
 @Composable
 private fun AppRoot(viewModel: PlayerViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
