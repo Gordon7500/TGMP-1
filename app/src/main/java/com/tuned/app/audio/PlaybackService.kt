@@ -246,30 +246,4 @@ class PlaybackService : Service() {
         const val CHANNEL_ID = "tuned_playback"
         const val NOTIFICATION_ID = 1
     }
-}    }
-
-    private fun buildNotification(title: String, text: String): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
-    }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID, "Playback", NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
-        }
-    }
-
-    companion object {
-        const val CHANNEL_ID = "tuned_playback"
-        const val NOTIFICATION_ID = 1
-    }
 }
