@@ -215,3 +215,4 @@ class AudioEngine(private val router: OutputDeviceRouter) {
         }
         onAmplitude?.invoke(maxAbs)
     }
+}
