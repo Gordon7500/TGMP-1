@@ -1,5 +1,6 @@
 package com.tuned.app.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -110,6 +111,51 @@ fun SettingsSheet(
             }
 
             Spacer(Modifier.height(22.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Direct output to DAC", color = TextPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Matches sample rate exactly and routes straight to a connected USB DAC when present. Turn off to use the phone's normal audio output.",
+                        color = TextMuted, fontSize = 11.5.sp, modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                Switch(
+                    checked = directOutput,
+                    onCheckedChange = { directOutput = it },
+                    colors = SwitchDefaults.colors(checkedTrackColor = Violet)
+                )
+            }
+
+            Spacer(Modifier.height(22.dp))
+            Button(
+                onClick = { onSave(token.trim(), channels, directOutput) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Violet)
+            ) { Text("Save & Sync", color = androidx.compose.ui.graphics.Color.Black, fontWeight = FontWeight.SemiBold) }
+
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "Telegram bots can't retrieve a channel's old history — only messages posted after the bot joins. " +
+                    "Keep the app open once after adding a new channel to catch its recent posts.",
+                color = TextMuted, fontSize = 11.5.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun fieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = Surface2,
+    unfocusedContainerColor = Surface2,
+    focusedBorderColor = Violet,
+    unfocusedBorderColor = Line,
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextPrimary
+)            Spacer(Modifier.height(22.dp))
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
