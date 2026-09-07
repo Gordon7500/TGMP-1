@@ -3,15 +3,9 @@ package com.tuned.app
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tuned.app.data.Track
+import com.tuned.app.ui.SortOrder
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-
-enum class SortOrder(val label: String) {
-    TITLE("Title"),
-    ARTIST("Artist"),
-    DATE_ADDED("Date Added"),
-    DURATION("Duration")
-}
 
 data class PlayerState(
     val tracks: List<Track> = emptyList(),
@@ -26,10 +20,15 @@ data class PlayerState(
     val channels: List<String> = emptyList(),
     val directOutputEnabled: Boolean = false,
     val equalizerEnabled: Boolean = false,
-    val equalizerBands: List<Int> = emptyList(),
-    val equalizerRangeMb: Int = 0,
+    val equalizerBands: List<EqualizerBand> = emptyList(),
+    val equalizerRangeMb: IntRange = 0..0,
     val bassBoostEnabled: Boolean = false,
     val bassBoostStrength: Int = 0
+)
+
+data class EqualizerBand(
+    val frequency: Float,
+    val level: Int
 )
 
 class PlayerViewModel : ViewModel() {
