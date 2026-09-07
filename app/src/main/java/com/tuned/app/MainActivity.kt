@@ -62,15 +62,6 @@ private fun AppRoot(viewModel: PlayerViewModel = viewModel()) {
             onOpenSettings = { showSettings = true },
             onOpenEqualizer = { showEqualizer = true },
             onConnectClick = { showSettings = true },
-            // Hook up local storage enablement directly to user intent
-            onToggleLocalStorage = { enabled ->
-                if (enabled) {
-                    permissionLauncher.launch(permission)
-                } else {
-                    viewModel.toggleLocalStorage(false)
-                }
-            },
-            localStorageEnabled = state.localStorageEnabled,
             statusMessage = state.statusMessage,
             modifier = Modifier.fillMaxSize()
         )
