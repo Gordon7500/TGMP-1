@@ -1,6 +1,11 @@
 package com.tuned.app
 
+import android.Manifest
+import android.os.Build
+import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,7 +18,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import android.os.Bundle
 import com.tuned.app.ui.EqualizerSheet
 import com.tuned.app.ui.LibraryScreen
 import com.tuned.app.ui.PlayerBar
@@ -34,6 +38,20 @@ private fun AppRoot(viewModel: PlayerViewModel = viewModel()) {
     var showSettings by remember { mutableStateOf(false) }
     var showEqualizer by remember { mutableStateOf(false) }
 
+    val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.toggleLocalStorage(true)
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         LibraryScreen(
             tracks = state.tracks,
@@ -44,6 +62,15 @@ private fun AppRoot(viewModel: PlayerViewModel = viewModel()) {
             onOpenSettings = { showSettings = true },
             onOpenEqualizer = { showEqualizer = true },
             onConnectClick = { showSettings = true },
+            // Hook up local storage enablement directly to user intent
+            onToggleLocalStorage = { enabled ->
+                if (enabled) {
+                    permissionLauncher.launch(permission)
+                } else {
+                    viewModel.toggleLocalStorage(false)
+                }
+            },
+            localStorageEnabled = state.localStorageEnabled,
             statusMessage = state.statusMessage,
             modifier = Modifier.fillMaxSize()
         )
