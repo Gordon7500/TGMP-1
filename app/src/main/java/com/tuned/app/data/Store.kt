@@ -66,6 +66,15 @@ class Store(context: Context) {
             prefs.edit().putString("channels", arr.toString()).apply()
         }
 
+    // New: Local storage settings
+    var localStorageEnabled: Boolean
+        get() = prefs.getBoolean("local_storage_enabled", false)
+        set(value) = prefs.edit().putBoolean("local_storage_enabled", value).apply()
+
+    var customMusicDirectory: String
+        get() = prefs.getString("custom_music_dir", "") ?: ""
+        set(value) = prefs.edit().putString("custom_music_dir", value).apply()
+
     var tracks: List<Track>
         get() {
             val raw = prefs.getString("tracks", "[]") ?: "[]"

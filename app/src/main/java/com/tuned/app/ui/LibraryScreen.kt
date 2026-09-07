@@ -34,7 +34,9 @@ fun LibraryScreen(
     onOpenEqualizer: () -> Unit,
     onConnectClick: () -> Unit,
     statusMessage: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLocalStorageToggle: ((Boolean) -> Unit)? = null,
+    localStorageEnabled: Boolean = false
 ) {
     var query by remember { mutableStateOf("") }
     var sortMenuOpen by remember { mutableStateOf(false) }
@@ -110,6 +112,23 @@ fun LibraryScreen(
             )
         )
 
+        // Local Storage Toggle
+        if (onLocalStorageToggle != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 10.dp)
+                    .background(Surface, RoundedCornerShape(8.dp)).padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Local Storage", color = TextPrimary, fontSize = 14.sp)
+                Switch(
+                    checked = localStorageEnabled,
+                    onCheckedChange = { onLocalStorageToggle(it) },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Cyan)
+                )
+            }
+        }
+
         statusMessage?.let {
             Box(
                 Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 10.dp)
@@ -133,7 +152,7 @@ fun LibraryScreen(
                 Text("No tracks yet", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Connect your bot and pull music from your Telegram channels.",
+                    "Connect your bot and pull music from your Telegram channels or enable local storage.",
                     color = TextMuted, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
                 Spacer(Modifier.height(22.dp))
