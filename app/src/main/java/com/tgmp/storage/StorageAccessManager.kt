@@ -2,6 +2,7 @@ package com.tgmp.storage
 
 import android.content.ContentUris
 import android.content.Context
+import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -10,12 +11,12 @@ import kotlinx.coroutines.withContext
 
 data class AudioFile(
     val id: Long,
-    val uri: Uri, // ESSENTIAL: Use this for playback 
+    val uri: Uri,
     val title: String,
     val artist: String,
     val album: String,
     val duration: Long,
-    val path: String, // Deprecated for file access in Android 10+, keep only for UI display
+    val path: String,
     val size: Long
 )
 
@@ -39,14 +40,10 @@ class StorageAccessManager(private val context: Context) {
     }
 
     suspend fun getAudioFilesFromDirectory(directoryName: String): List<AudioFile> = withContext(Dispatchers.IO) {
-        val selection: String
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // API 29+: Use RELATIVE_PATH. Note: directoryName should be like "Music/MyFolder/"
-            selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?"
+        val selection: String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?"
         } else {
-            // API 26-28: Fall back to DATA absolute path
-            selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DATA} LIKE ?"
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DATA} LIKE ?"
         }
         
         val selectionArgs = arrayOf("%$directoryName%")
@@ -85,7 +82,6 @@ class StorageAccessManager(private val context: Context) {
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idColumn)
-                    // Construct the Uri dynamically
                     val uri = ContentUris.withAppendedId(baseUri, id)
 
                     audioFiles.add(
@@ -103,8 +99,6 @@ class StorageAccessManager(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            // In a production app, do not blindly swallow this. 
-            // Re-throw or use a Result wrapper to handle permission denials in the UI.
             e.printStackTrace()
         }
 
