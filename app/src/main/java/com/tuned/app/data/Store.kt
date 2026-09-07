@@ -23,6 +23,15 @@ class Store(context: Context) {
         get() = prefs.getBoolean("direct_output", true)
         set(value) = prefs.edit().putBoolean("direct_output", value).apply()
 
+    /** From https://my.telegram.org — required once, for the real-account login (TDLib) path. */
+    var tdApiId: Int
+        get() = prefs.getInt("td_api_id", 0)
+        set(value) = prefs.edit().putInt("td_api_id", value).apply()
+
+    var tdApiHash: String
+        get() = prefs.getString("td_api_hash", "") ?: ""
+        set(value) = prefs.edit().putString("td_api_hash", value).apply()
+
     /** One of: "title", "artist", "dateAdded", "duration" */
     var sortOrder: String
         get() = prefs.getString("sort_order", "dateAdded") ?: "dateAdded"
@@ -65,15 +74,6 @@ class Store(context: Context) {
             value.forEach { arr.put(it) }
             prefs.edit().putString("channels", arr.toString()).apply()
         }
-
-    // New: Local storage settings
-    var localStorageEnabled: Boolean
-        get() = prefs.getBoolean("local_storage_enabled", false)
-        set(value) = prefs.edit().putBoolean("local_storage_enabled", value).apply()
-
-    var customMusicDirectory: String
-        get() = prefs.getString("custom_music_dir", "") ?: ""
-        set(value) = prefs.edit().putString("custom_music_dir", value).apply()
 
     var tracks: List<Track>
         get() {
