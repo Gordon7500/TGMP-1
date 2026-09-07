@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tuned.app.data.Track
 import com.tuned.app.ui.SortOrder
+import com.tuned.app.ui.EqualizerBand
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -24,11 +25,6 @@ data class PlayerState(
     val equalizerRangeMb: IntRange = 0..0,
     val bassBoostEnabled: Boolean = false,
     val bassBoostStrength: Int = 0
-)
-
-data class EqualizerBand(
-    val frequency: Float,
-    val level: Int
 )
 
 class PlayerViewModel : ViewModel() {
