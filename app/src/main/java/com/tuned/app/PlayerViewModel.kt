@@ -1,7 +1,7 @@
 package com.tuned.app
 
-import android.content.Context
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tuned.app.data.Track
 import com.tuned.app.data.LocalTrackProvider
@@ -33,12 +33,14 @@ data class PlayerState(
     val localTracks: List<Track> = emptyList()
 )
 
-class PlayerViewModel(private val context: Context? = null) : ViewModel() {
-    private val _state = MutableStateFlow(PlayerState())
+class PlayerViewModel(application: Application) : AndroidViewModel(application) {
+    private val store = Store(application)
+    private val localTrackProvider = LocalTrackProvider(application)
+
+    private val _state = MutableStateFlow(PlayerState(
+        localStorageEnabled = store.localStorageEnabled
+    ))
     val state: StateFlow<PlayerState> = _state
-    
-    private val store: Store? = context?.let { Store(it) }
-    private val localTrackProvider: LocalTrackProvider? = context?.let { LocalTrackProvider(it) }
 
     init {
         loadTracks()
@@ -48,41 +50,42 @@ class PlayerViewModel(private val context: Context? = null) : ViewModel() {
         viewModelScope.launch {
             val allTracks = mutableListOf<Track>()
             
-            // Load Telegram tracks
-            store?.tracks?.let { allTracks.addAll(it) }
+            // Load Telegram tracks safely
+            store.tracks?.let { allTracks.addAll(it) }
             
-            // Load local storage tracks if enabled
-            if (store?.localStorageEnabled == true) {
-                localTrackProvider?.getLocalTracks()?.let { allTracks.addAll(it) }
+            // Load local storage tracks if enabled in preferences
+            if (store.localStorageEnabled) {
+                val localTracks = localTrackProvider.getLocalTracks()
+                allTracks.addAll(localTracks)
+                _state.value = _state.value.copy(localTracks = localTracks)
             }
             
-            _state.value = _state.value.copy(tracks = allTracks)
+            _state.value = _state.value.copy(tracks = allTracks.distinctBy { it.fileUniqueId })
         }
     }
 
     fun loadLocalTracks() {
         viewModelScope.launch {
-            localTrackProvider?.let { provider ->
-                val localTracks = provider.getLocalTracks()
-                _state.value = _state.value.copy(
-                    localTracks = localTracks,
-                    statusMessage = "Loaded ${localTracks.size} local tracks"
-                )
-                
-                // Merge with existing tracks
-                val allTracks = (_state.value.tracks + localTracks).distinctBy { it.fileUniqueId }
-                _state.value = _state.value.copy(tracks = allTracks)
-            }
+            val localTracks = localTrackProvider.getLocalTracks()
+            _state.value = _state.value.copy(
+                localTracks = localTracks,
+                statusMessage = "Loaded ${localTracks.size} local tracks"
+            )
+            
+            // Merge with existing non-local tracks
+            val currentTelegramTracks = _state.value.tracks.filter { it.sourceChat != "Local Storage" }
+            val allTracks = (currentTelegramTracks + localTracks).distinctBy { it.fileUniqueId }
+            _state.value = _state.value.copy(tracks = allTracks)
         }
     }
 
     fun searchTracks(query: String) {
         viewModelScope.launch {
-            val telegramTracks = store?.tracks?.filter {
+            val telegramTracks = store.tracks?.filter {
                 it.title.contains(query, ignoreCase = true) || it.artist.contains(query, ignoreCase = true)
             } ?: emptyList()
             
-            val localTracks = localTrackProvider?.searchLocalTracks(query) ?: emptyList()
+            val localTracks = localTrackProvider.searchLocalTracks(query)
             val allTracks = (telegramTracks + localTracks).distinctBy { it.fileUniqueId }
             
             _state.value = _state.value.copy(tracks = allTracks)
@@ -90,14 +93,17 @@ class PlayerViewModel(private val context: Context? = null) : ViewModel() {
     }
 
     fun toggleLocalStorage(enabled: Boolean) {
-        store?.localStorageEnabled = enabled
+        store.localStorageEnabled = enabled
         _state.value = _state.value.copy(localStorageEnabled = enabled)
+        
         if (enabled) {
             loadLocalTracks()
         } else {
-            // Remove local tracks
             val filteredTracks = _state.value.tracks.filter { it.sourceChat != "Local Storage" }
-            _state.value = _state.value.copy(tracks = filteredTracks)
+            _state.value = _state.value.copy(
+                tracks = filteredTracks,
+                localTracks = emptyList()
+            )
         }
     }
 
