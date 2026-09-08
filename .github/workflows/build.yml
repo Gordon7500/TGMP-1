@@ -35,9 +35,10 @@ jobs:
           sudo apt-get install -y -qq gperf php-cli
           git clone --depth 1 https://github.com/tdlib/td.git /tmp/td
           cd /tmp/td/example/android
-          ./build-openssl.sh "$ANDROID_HOME" "$ANDROID_NDK_VERSION" "" ""
-          # Restrict the build to arm64-v8a only by editing the ABI list this script builds for.
-          sed -i "s/'armeabi-v7a' 'arm64-v8a' 'x86' 'x86_64'/'arm64-v8a'/" build-tdlib.sh || true
+          # Restrict both scripts to arm64-v8a only (verified against the real script text —
+          # the previous attempt used a guessed format that never actually matched).
+          sed -i "s/for ABI in arm64-v8a armeabi-v7a x86_64 x86 ; do/for ABI in arm64-v8a ; do/" build-openssl.sh build-tdlib.sh
+          ./build-openssl.sh "$ANDROID_HOME" "$ANDROID_NDK_VERSION" "$(pwd)/openssl" ""
           ./build-tdlib.sh "$ANDROID_HOME" "$ANDROID_NDK_VERSION" "$(pwd)/openssl" "" "JSON"
           mkdir -p "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a"
           find tdlib/libs -name "libtdjson.so" -exec cp {} "$GITHUB_WORKSPACE/app/src/main/jniLibs/arm64-v8a/libtdjson.so" \;
