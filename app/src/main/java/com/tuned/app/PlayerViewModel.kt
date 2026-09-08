@@ -37,7 +37,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val store = Store(application)
     private val localTrackProvider = LocalTrackProvider(application)
 
-    // === LOCAL STORAGE ENABLED (FIXED HERE) ===
+    // === THIS IS THE FIX - LOCAL STORAGE ENABLED ===
     private val localStorageEnabled = store.localStorageEnabled
 
     private val _state = MutableStateFlow(PlayerState(
@@ -110,14 +110,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun setSortOrder(order: SortOrder) { /* Implementation */ }
-    fun playTrack(track: Track) { /* Implementation */ }
-    fun togglePlayPause() { /* Implementation */ }
-    fun playAdjacent(offset: Int) { /* Implementation */ }
-    fun seekTo(positionMs: Long) { /* Implementation */ }
-    fun saveSettings(token: String, channels: List<String>, directOutput: Boolean) { /* Implementation */ }
-    fun setEqualizerEnabled(enabled: Boolean) { /* Implementation */ }
-    fun setEqualizerBand(index: Int, level: Int) { /* Implementation */ }
-    fun setBassBoostEnabled(enabled: Boolean) { /* Implementation */ }
-    fun setBassBoostStrength(strength: Int) { /* Implementation */ }
+    // All your missing stub functions
+    fun setSortOrder(order: SortOrder) { /* TODO: Implement */ }
+    fun playTrack(track: Track) { /* TODO: Implement */ }
+    fun togglePlayPause() { /* TODO: Implement */ }
+    fun playAdjacent(offset: Int) { /* TODO: Implement */ }
+    fun seekTo(positionMs: Long) { /* TODO: Implement */ }
+    fun saveSettings(token: String, channels: List<String>, directOutput: Boolean) { /* TODO: Implement */ }
+    fun setEqualizerEnabled(enabled: Boolean) { /* TODO: Implement */ }
+    fun setEqualizerBand(index: Int, level: Int) { /* TODO: Implement */ }
+    fun setBassBoostEnabled(enabled: Boolean) { /* TODO: Implement */ }
+    fun setBassBoostStrength(strength: Int) { /* TODO: Implement */ }
 }
