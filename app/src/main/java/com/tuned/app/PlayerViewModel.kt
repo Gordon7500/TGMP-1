@@ -37,8 +37,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val store = Store(application)
     private val localTrackProvider = LocalTrackProvider(application)
 
+    // === LOCAL STORAGE ENABLED (FIXED HERE) ===
+    private val localStorageEnabled = store.localStorageEnabled
+
     private val _state = MutableStateFlow(PlayerState(
-        localStorageEnabled = store.localStorageEnabled
+        localStorageEnabled = localStorageEnabled
     ))
     val state: StateFlow<PlayerState> = _state
 
@@ -54,7 +57,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             store.tracks?.let { allTracks.addAll(it) }
             
             // Load local storage tracks if enabled in preferences
-            if (store.localStorageEnabled) {
+            if (localStorageEnabled) {
                 val localTracks = localTrackProvider.getLocalTracks()
                 allTracks.addAll(localTracks)
                 _state.value = _state.value.copy(localTracks = localTracks)
