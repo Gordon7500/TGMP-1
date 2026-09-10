@@ -1,57 +1,59 @@
 package com.tuned.app.data
 
+import android.content.ContentUris
 import android.content.Context
-import com.tgmp.storage.StorageAccessManager
-import com.tgmp.storage.AudioFile
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.File
+import android.provider.MediaStore
 
-/**
- * Converts local device audio files to Track objects for display in the library.
- * Bridges StorageAccessManager with the existing Track data model.
- */
-class LocalTrackProvider(context: Context) {
-    private val storageManager = StorageAccessManager(context)
+/** Reads audio files already on the device, via the standard MediaStore index (no file-path scanning needed). */
+class LocalTrackProvider(private val context: Context) {
 
-    /**
-     * Get all local audio files and convert them to Track objects
-     */
-    suspend fun getLocalTracks(): List<Track> = withContext(Dispatchers.IO) {
-        val audioFiles = storageManager.getAudioFiles()
-        audioFiles.map { convertAudioFileToTrack(it) }
-    }
+    fun getLocalTracks(): List<Track> {
+        val tracks = mutableListOf<Track>()
 
-    /**
-     * Search local audio files by title or artist
-     */
-    suspend fun searchLocalTracks(query: String): List<Track> = withContext(Dispatchers.IO) {
-        val audioFiles = storageManager.searchAudioFiles(query)
-        audioFiles.map { convertAudioFileToTrack(it) }
-    }
-
-    /**
-     * Get audio files from a specific directory
-     */
-    suspend fun getTracksFromDirectory(directoryPath: String): List<Track> =
-        withContext(Dispatchers.IO) {
-            val audioFiles = storageManager.getAudioFilesFromDirectory(directoryPath)
-            audioFiles.map { convertAudioFileToTrack(it) }
-        }
-
-    /**
-     * Convert AudioFile from storage to Track model
-     */
-    private fun convertAudioFileToTrack(audioFile: AudioFile): Track {
-        return Track(
-            fileId = audioFile.id.toString(),
-            fileUniqueId = audioFile.id.toString(),
-            title = audioFile.title,
-            artist = audioFile.artist,
-            durationSec = (audioFile.duration / 1000).toInt(),
-            thumbFileId = null,
-            sourceChat = "Local Storage",
-            dateAdded = System.currentTimeMillis()
+        val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.DATE_ADDED
         )
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+
+        context.contentResolver.query(collection, projection, selection, null, null)?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+            val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idCol)
+                val uri = ContentUris.withAppendedId(collection, id).toString()
+                val title = cursor.getString(titleCol) ?: cursor.getString(nameCol) ?: "Untitled"
+                val artist = cursor.getString(artistCol)?.takeIf { it.isNotBlank() && it != "<unknown>" }
+                    ?: "Unknown artist"
+                val durationMs = cursor.getLong(durationCol)
+                val dateAdded = cursor.getLong(dateCol)
+
+                tracks.add(
+                    Track(
+                        fileId = uri,
+                        fileUniqueId = "local:$id",
+                        title = title,
+                        artist = artist,
+                        durationSec = (durationMs / 1000).toInt(),
+                        thumbFileId = null,
+                        sourceChat = "This device",
+                        dateAdded = dateAdded,
+                        isLocal = true,
+                        localUri = uri
+                    )
+                )
+            }
+        }
+        return tracks
     }
 }
