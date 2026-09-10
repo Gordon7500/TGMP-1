@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.tuned.app.audio.AudioEffectsController
 import com.tuned.app.audio.PlaybackService
 import com.tuned.app.audio.ServicePlaybackState
+import com.tuned.app.data.LocalTrackProvider
 import com.tuned.app.data.Store
 import com.tuned.app.data.Track
 import com.tuned.app.telegram.TelegramClient
@@ -39,12 +40,15 @@ data class UiState(
     val equalizerBands: List<EqualizerBand> = emptyList(),
     val equalizerRangeMb: IntRange = -1500..1500,
     val bassBoostEnabled: Boolean = false,
-    val bassBoostStrength: Int = 0
+    val bassBoostStrength: Int = 0,
+    val localStorageEnabled: Boolean = false
 )
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val store = Store(application)
+    private val localTrackProvider = LocalTrackProvider(application)
+    private var localTracks: List<Track> = emptyList()
 
     private val _state = MutableStateFlow(
         UiState(
@@ -56,7 +60,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             sortOrder = sortOrderFrom(store.sortOrder),
             equalizerEnabled = store.equalizerEnabled,
             bassBoostEnabled = store.bassBoostEnabled,
-            bassBoostStrength = store.bassBoostStrength
+            bassBoostStrength = store.bassBoostStrength,
+            localStorageEnabled = store.localStorageEnabled
         )
     )
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -84,7 +89,31 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     init {
         val app = getApplication<Application>()
         app.bindService(Intent(app, PlaybackService::class.java), connection, Context.BIND_AUTO_CREATE)
+        if (store.localStorageEnabled) refreshLocalTracks()
         if (store.botToken.isNotBlank()) sync()
+    }
+
+    /** Recombines Telegram tracks (from Store) with in-memory local tracks and re-sorts. */
+    private fun rebuildTracks() {
+        val combined = (store.tracks + localTracks).distinctBy { it.fileUniqueId }
+        _state.value = _state.value.copy(tracks = sortedTracks(combined, _state.value.sortOrder))
+    }
+
+    private fun refreshLocalTracks() {
+        localTracks = localTrackProvider.getLocalTracks()
+        rebuildTracks()
+    }
+
+    /** Call after local-file permission has been granted. */
+    fun setLocalStorageEnabled(enabled: Boolean) {
+        store.localStorageEnabled = enabled
+        _state.value = _state.value.copy(localStorageEnabled = enabled)
+        if (enabled) {
+            refreshLocalTracks()
+        } else {
+            localTracks = emptyList()
+            rebuildTracks()
+        }
     }
 
     private var lastAppliedTrackId: String? = null
@@ -131,10 +160,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setSortOrder(order: SortOrder) {
         store.sortOrder = order.name
-        _state.value = _state.value.copy(
-            sortOrder = order,
-            tracks = sortedTracks(store.tracks, order)
-        )
+        _state.value = _state.value.copy(sortOrder = order)
+        rebuildTracks()
     }
 
     fun sync() {
@@ -153,8 +180,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (newTracks.isNotEmpty()) {
                     val merged = newTracks + store.tracks
                     store.tracks = merged
+                    rebuildTracks()
                     _state.value = _state.value.copy(
-                        tracks = sortedTracks(merged, _state.value.sortOrder),
                         statusMessage = "Added ${newTracks.size} new track${if (newTracks.size == 1) "" else "s"}."
                     )
                 } else {
