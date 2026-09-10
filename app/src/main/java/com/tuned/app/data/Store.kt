@@ -23,6 +23,10 @@ class Store(context: Context) {
         get() = prefs.getBoolean("direct_output", true)
         set(value) = prefs.edit().putBoolean("direct_output", value).apply()
 
+    var localStorageEnabled: Boolean
+        get() = prefs.getBoolean("local_storage_enabled", false)
+        set(value) = prefs.edit().putBoolean("local_storage_enabled", value).apply()
+
     /** From https://my.telegram.org — required once, for the real-account login (TDLib) path. */
     var tdApiId: Int
         get() = prefs.getInt("td_api_id", 0)
