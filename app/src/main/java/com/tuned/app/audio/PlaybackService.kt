@@ -54,7 +54,7 @@ class PlaybackService : Service() {
         super.onCreate()
         store = Store(applicationContext)
         effects = AudioEffectsController(store)
-        engine = AudioEngine(OutputDeviceRouter(applicationContext))
+        engine = AudioEngine(OutputDeviceRouter(applicationContext), applicationContext)
         engine.onStateChanged = { s -> onEngineStateChanged(s) }
         engine.onProgress = { pos, dur ->
             _state.value = _state.value.copy(positionMs = pos, durationMs = dur)
@@ -105,6 +105,12 @@ class PlaybackService : Service() {
         _state.value = _state.value.copy(currentTrack = track, statusMessage = "Loading track…")
         updateMetadata(track)
         startForegroundIfNeeded(track)
+
+        if (track.isLocal && track.localUri != null) {
+            _state.value = _state.value.copy(statusMessage = null)
+            engine.play(track.localUri, store.directOutputEnabled, serviceScope)
+            return
+        }
 
         serviceScope.launch {
             try {
