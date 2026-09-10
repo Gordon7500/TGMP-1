@@ -112,6 +112,24 @@ class PlaybackService : Service() {
             return
         }
 
+        if (track.tdFileId != null) {
+            serviceScope.launch {
+                val auth = com.tuned.app.telegram.TdLibSessionManager.auth
+                if (auth == null) {
+                    _state.value = _state.value.copy(statusMessage = "Telegram account session isn't active — open Settings and log in again.")
+                    return@launch
+                }
+                val path = auth.resolveLocalFilePath(track.tdFileId)
+                if (path == null) {
+                    _state.value = _state.value.copy(statusMessage = "Couldn't download this track.")
+                    return@launch
+                }
+                _state.value = _state.value.copy(statusMessage = null)
+                engine.play(path, store.directOutputEnabled, serviceScope)
+            }
+            return
+        }
+
         serviceScope.launch {
             try {
                 val client = TelegramClient(store.botToken)
