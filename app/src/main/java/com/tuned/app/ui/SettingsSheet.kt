@@ -23,9 +23,12 @@ fun SettingsSheet(
     initialToken: String,
     initialChannels: List<String>,
     initialDirectOutput: Boolean,
+    localStorageEnabled: Boolean,
     onDismiss: () -> Unit,
     onSave: (token: String, channels: List<String>, directOutput: Boolean) -> Unit,
-    onOpenAccountLogin: () -> Unit
+    onOpenAccountLogin: () -> Unit,
+    onRequestLocalStorage: () -> Unit,
+    onDisableLocalStorage: () -> Unit
 ) {
     var token by remember { mutableStateOf(initialToken) }
     var channels by remember { mutableStateOf(initialChannels) }
@@ -129,6 +132,28 @@ fun SettingsSheet(
                 Switch(
                     checked = directOutput,
                     onCheckedChange = { directOutput = it },
+                    colors = SwitchDefaults.colors(checkedTrackColor = Violet)
+                )
+            }
+
+            Spacer(Modifier.height(22.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Include music on this device", color = TextPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Adds audio files already on your phone to your library, alongside Telegram.",
+                        color = TextMuted, fontSize = 11.5.sp, modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                Switch(
+                    checked = localStorageEnabled,
+                    onCheckedChange = { enabled ->
+                        if (enabled) onRequestLocalStorage() else onDisableLocalStorage()
+                    },
                     colors = SwitchDefaults.colors(checkedTrackColor = Violet)
                 )
             }
