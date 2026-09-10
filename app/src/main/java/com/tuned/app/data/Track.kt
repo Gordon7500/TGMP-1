@@ -8,5 +8,7 @@ data class Track(
     val durationSec: Int,
     val thumbFileId: String?,
     val sourceChat: String,
-    val dateAdded: Long
+    val dateAdded: Long,
+    val isLocal: Boolean = false,
+    val localUri: String? = null
 )
