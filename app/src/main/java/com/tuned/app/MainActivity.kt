@@ -1,8 +1,13 @@
 package com.tuned.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -11,6 +16,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tuned.app.ui.*
 
@@ -30,12 +37,24 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun audioPermissionName(): String =
+    if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
+    else Manifest.permission.READ_EXTERNAL_STORAGE
+
 @Composable
 private fun AppRoot(viewModel: PlayerViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var showSettings by remember { mutableStateOf(false) }
     var showEqualizer by remember { mutableStateOf(false) }
     var showTelegramLogin by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) viewModel.setLocalStorageEnabled(true)
+        // If denied, the switch simply stays off — no further action needed.
+    }
 
     Box(Modifier.fillMaxSize()) {
         LibraryScreen(
@@ -72,6 +91,7 @@ private fun AppRoot(viewModel: PlayerViewModel) {
             initialToken = state.botToken,
             initialChannels = state.channels,
             initialDirectOutput = state.directOutputEnabled,
+            localStorageEnabled = state.localStorageEnabled,
             onDismiss = { showSettings = false },
             onSave = { token, channels, directOutput ->
                 viewModel.saveSettings(token, channels, directOutput)
@@ -80,7 +100,18 @@ private fun AppRoot(viewModel: PlayerViewModel) {
             onOpenAccountLogin = {
                 showSettings = false
                 showTelegramLogin = true
-            }
+            },
+            onRequestLocalStorage = {
+                val permission = audioPermissionName()
+                val alreadyGranted = ContextCompat.checkSelfPermission(context, permission) ==
+                    PackageManager.PERMISSION_GRANTED
+                if (alreadyGranted) {
+                    viewModel.setLocalStorageEnabled(true)
+                } else {
+                    permissionLauncher.launch(permission)
+                }
+            },
+            onDisableLocalStorage = { viewModel.setLocalStorageEnabled(false) }
         )
     }
 
