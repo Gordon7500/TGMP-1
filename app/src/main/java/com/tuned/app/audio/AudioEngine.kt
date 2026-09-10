@@ -1,6 +1,8 @@
 package com.tuned.app.audio
 
+import android.content.Context
 import android.media.*
+import android.net.Uri
 import kotlinx.coroutines.*
 import java.nio.ByteBuffer
 
@@ -25,7 +27,7 @@ import java.nio.ByteBuffer
  *   bit-perfect. The two features are fundamentally in tension; enabling EQ means you are, by
  *   definition, no longer getting an untouched signal, regardless of the direct-output setting.
  */
-class AudioEngine(private val router: OutputDeviceRouter) {
+class AudioEngine(private val router: OutputDeviceRouter, private val context: Context) {
 
     enum class State { IDLE, PLAYING, PAUSED, ENDED, ERROR }
 
@@ -77,7 +79,11 @@ class AudioEngine(private val router: OutputDeviceRouter) {
 
     private suspend fun playInternal(url: String, directOutputPreferred: Boolean) {
         val extractor = MediaExtractor()
-        extractor.setDataSource(url)
+        if (url.startsWith("content://")) {
+            extractor.setDataSource(context, Uri.parse(url), null)
+        } else {
+            extractor.setDataSource(url)
+        }
 
         var trackIndex = -1
         var format: MediaFormat? = null
