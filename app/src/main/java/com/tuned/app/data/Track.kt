@@ -10,5 +10,7 @@ data class Track(
     val sourceChat: String,
     val dateAdded: Long,
     val isLocal: Boolean = false,
-    val localUri: String? = null
+    val localUri: String? = null,
+    /** Set only for tracks pulled through the real-account TDLib login, not the bot. */
+    val tdFileId: Int? = null
 )
