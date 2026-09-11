@@ -1,13 +1,17 @@
 package com.tuned.app.telegram
 
 import android.content.Context
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 sealed class TdAuthState {
     data object Connecting : TdAuthState()
@@ -18,11 +22,6 @@ sealed class TdAuthState {
     data class Error(val message: String) : TdAuthState()
 }
 
-/**
- * Drives TDLib's login flow. This is the first phase (get logged in) — pulling actual chat/audio
- * data through this client is a separate follow-up, deliberately kept out of this class so login
- * can be verified working on its own first.
- */
 class TelegramUserAuth(
     private val context: Context,
     private val apiId: Int,
@@ -35,6 +34,8 @@ class TelegramUserAuth(
     val authState: StateFlow<TdAuthState> = _authState
 
     private var running = true
+    private val requestIdCounter = AtomicLong(1)
+    private val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<JSONObject>>()
 
     init {
         scope.launch { receiveLoop() }
@@ -50,6 +51,13 @@ class TelegramUserAuth(
     private fun handleUpdate(json: String) {
         try {
             val obj = JSONObject(json)
+            
+            // Route response to caller if @extra correlation ID exists
+            val extra = obj.optString("@extra", "")
+            if (extra.isNotEmpty()) {
+                pendingRequests.remove(extra)?.complete(obj)
+            }
+
             if (obj.optString("@type") != "updateAuthorizationState") return
             val state = obj.optJSONObject("authorization_state") ?: return
             when (state.optString("@type")) {
@@ -66,6 +74,42 @@ class TelegramUserAuth(
         } catch (e: Exception) {
             _authState.value = TdAuthState.Error("Couldn't parse TDLib response: ${e.message}")
         }
+    }
+
+    private suspend fun sendRequest(request: JSONObject): JSONObject? {
+        val extraId = requestIdCounter.getAndIncrement().toString()
+        request.put("@extra", extraId)
+        val deferred = CompletableDeferred<JSONObject>()
+        pendingRequests[extraId] = deferred
+        client.send(request.toString())
+        
+        return withTimeoutOrNull(15000) { deferred.await() }
+    }
+
+    suspend fun resolveLocalFilePath(fileId: Int): String? {
+        // 1. Fetch file status from TDLib
+        val getFileReq = JSONObject().apply {
+            put("@type", "getFile")
+            put("file_id", fileId)
+        }
+        var response = sendRequest(getFileReq) ?: return null
+        if (response.optString("@type") == "error") return null
+
+        var local = response.optJSONObject("local") ?: return null
+        if (local.optBoolean("is_downloading_completed", false)) {
+            return local.optString("path").takeIf { it.isNotEmpty() }
+        }
+
+        // 2. File not local; trigger download
+        val downloadReq = JSONObject().apply {
+            put("@type", "downloadFile")
+            put("file_id", fileId)
+            put("priority", 32)
+            put("synchronous", true)
+        }
+        response = sendRequest(downloadReq) ?: return null
+        local = response.optJSONObject("local") ?: return null
+        return local.optString("path").takeIf { it.isNotEmpty() }
     }
 
     private fun sendTdlibParameters() {
