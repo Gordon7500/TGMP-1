@@ -145,6 +145,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         )
     }
 
+    /** Merges tracks pulled via the real-account TDLib login into the persisted library. */
+    fun addTelegramAccountTracks(newTracks: List<Track>) {
+        val known = store.tracks.map { it.fileUniqueId }.toSet()
+        val toAdd = newTracks.filter { it.fileUniqueId !in known }
+        if (toAdd.isEmpty()) return
+        store.tracks = toAdd + store.tracks
+        rebuildTracks()
+    }
+
     fun saveSettings(token: String, channels: List<String>, directOutput: Boolean) {
         store.botToken = token
         store.channels = channels
@@ -167,7 +176,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun sync() {
         val token = store.botToken
         if (token.isBlank()) {
-            _state.value = _state.value.copy(statusMessage = "Add your bot token in Settings first.")
+            _state.value = _state.value.copy(statusMessage = null)
             return
         }
         _state.value = _state.value.copy(isSyncing = true, statusMessage = "Checking for new tracks…")
