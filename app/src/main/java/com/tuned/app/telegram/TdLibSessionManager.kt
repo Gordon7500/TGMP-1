@@ -23,4 +23,12 @@ object TdLibSessionManager {
             return created
         }
     }
+
+    /** Called when a session closes (logout or fatal error) so the next attempt starts fresh
+     *  instead of silently reusing a dead, disconnected client. */
+    fun clearIfCurrent(instance: TelegramUserAuth) {
+        synchronized(this) {
+            if (auth === instance) auth = null
+        }
+    }
 }
