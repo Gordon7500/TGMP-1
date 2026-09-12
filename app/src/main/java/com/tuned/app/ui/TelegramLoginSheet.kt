@@ -1,5 +1,6 @@
 package com.tuned.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -13,15 +14,19 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tuned.app.data.Store
+import com.tuned.app.data.Track
 import com.tuned.app.telegram.TdAuthState
+import com.tuned.app.telegram.TdLibSessionManager
 import com.tuned.app.telegram.TelegramUserAuth
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TelegramLoginSheet(onDismiss: () -> Unit) {
+fun TelegramLoginSheet(onDismiss: () -> Unit, onTracksFetched: (List<Track>) -> Unit) {
     val context = LocalContext.current
     val store = remember { Store(context) }
+    val scope = rememberCoroutineScope()
 
     var apiId by remember { mutableStateOf(if (store.tdApiId != 0) store.tdApiId.toString() else "") }
     var apiHash by remember { mutableStateOf(store.tdApiHash) }
@@ -31,11 +36,20 @@ fun TelegramLoginSheet(onDismiss: () -> Unit) {
     var code by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
-    var auth by remember { mutableStateOf<TelegramUserAuth?>(null) }
+    var auth by remember { mutableStateOf<TelegramUserAuth?>(TdLibSessionManager.auth) }
     var authState by remember { mutableStateOf<TdAuthState>(TdAuthState.Connecting) }
+
+    var isSyncing by remember { mutableStateOf(false) }
+    var syncStatus by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(auth) {
         auth?.authState?.collect { authState = it }
+    }
+
+    fun ensureAuth(): TelegramUserAuth {
+        val instance = TdLibSessionManager.getOrCreate(context, store.tdApiId, store.tdApiHash)
+        auth = instance
+        return instance
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Surface) {
@@ -86,7 +100,7 @@ fun TelegramLoginSheet(onDismiss: () -> Unit) {
                         store.tdApiId = id
                         store.tdApiHash = apiHash
                         credentialsSaved = true
-                        auth = TelegramUserAuth(context.applicationContext, id, apiHash)
+                        auth = TdLibSessionManager.getOrCreate(context, id, apiHash)
                     },
                     enabled = apiId.isNotBlank() && apiHash.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
@@ -96,9 +110,7 @@ fun TelegramLoginSheet(onDismiss: () -> Unit) {
             }
 
             LaunchedEffect(Unit) {
-                if (auth == null) {
-                    auth = TelegramUserAuth(context.applicationContext, store.tdApiId, store.tdApiHash)
-                }
+                if (auth == null) ensureAuth()
             }
 
             when (val s = authState) {
@@ -160,11 +172,50 @@ fun TelegramLoginSheet(onDismiss: () -> Unit) {
 
                 is TdAuthState.Ready -> {
                     Text("Logged in.", color = Cyan, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(12.dp))
+
+                    if (isSyncing) {
+                        LoginStatusRow(syncStatus ?: "Scanning your chats…")
+                    } else {
+                        Button(
+                            onClick = {
+                                val activeAuth = auth ?: return@Button
+                                isSyncing = true
+                                syncStatus = null
+                                scope.launch {
+                                    val tracks = activeAuth.fetchAudioTracks(
+                                        onProgress = { syncStatus = it }
+                                    )
+                                    isSyncing = false
+                                    syncStatus = "Found ${tracks.size} track${if (tracks.size == 1) "" else "s"}."
+                                    if (tracks.isNotEmpty()) onTracksFetched(tracks)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Violet)
+                        ) { Text("Scan my chats for music", color = androidx.compose.ui.graphics.Color.Black) }
+                    }
+
+                    syncStatus?.let {
+                        Spacer(Modifier.height(10.dp))
+                        Text(it, color = TextMuted, fontSize = 12.sp)
+                    }
+
+                    Spacer(Modifier.height(14.dp))
                     Text(
-                        "Pulling your actual chats/audio through this login is the next step — " +
-                            "not built yet. This confirms the login itself works.",
-                        color = TextMuted, fontSize = 12.sp
+                        "Scans a bounded set of your recent chats (25 chats, 50 messages each) for " +
+                            "audio files. Run it again later to pick up more — it doesn't remove " +
+                            "anything already in your library.",
+                        color = TextMuted, fontSize = 11.sp
+                    )
+
+                    Spacer(Modifier.height(18.dp))
+                    Text(
+                        "Log out",
+                        color = Magenta, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable {
+                            auth?.logOut()
+                        }
                     )
                 }
 
@@ -172,6 +223,16 @@ fun TelegramLoginSheet(onDismiss: () -> Unit) {
                     Text("Something went wrong", color = Magenta, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(6.dp))
                     Text(s.message, color = TextMuted, fontSize = 12.sp)
+                    Spacer(Modifier.height(14.dp))
+                    Button(
+                        onClick = {
+                            syncStatus = null
+                            phone = ""; code = ""; password = ""
+                            auth = ensureAuth()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Violet)
+                    ) { Text("Start over", color = androidx.compose.ui.graphics.Color.Black) }
                 }
             }
         }
