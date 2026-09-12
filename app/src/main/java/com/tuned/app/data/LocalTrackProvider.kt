@@ -17,7 +17,9 @@ class LocalTrackProvider(private val context: Context) {
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DISPLAY_NAME,
-            MediaStore.Audio.Media.DATE_ADDED
+            MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.SIZE,
+            MediaStore.Audio.Media.MIME_TYPE
         )
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
 
@@ -28,6 +30,8 @@ class LocalTrackProvider(private val context: Context) {
             val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
             val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+            val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+            val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idCol)
@@ -37,6 +41,9 @@ class LocalTrackProvider(private val context: Context) {
                     ?: "Unknown artist"
                 val durationMs = cursor.getLong(durationCol)
                 val dateAdded = cursor.getLong(dateCol)
+                val sizeBytes = cursor.getLong(sizeCol).takeIf { it > 0 }
+                val mimeType = cursor.getString(mimeCol)
+                val durationSec = (durationMs / 1000).toInt()
 
                 tracks.add(
                     Track(
@@ -44,12 +51,13 @@ class LocalTrackProvider(private val context: Context) {
                         fileUniqueId = "local:$id",
                         title = title,
                         artist = artist,
-                        durationSec = (durationMs / 1000).toInt(),
+                        durationSec = durationSec,
                         thumbFileId = null,
                         sourceChat = "This device",
                         dateAdded = dateAdded,
                         isLocal = true,
-                        localUri = uri
+                        localUri = uri,
+                        qualityLabel = QualityLabel.estimate(cursor.getString(nameCol), mimeType, sizeBytes, durationSec)
                     )
                 )
             }
