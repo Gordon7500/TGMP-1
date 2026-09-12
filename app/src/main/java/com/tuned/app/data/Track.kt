@@ -12,5 +12,7 @@ data class Track(
     val isLocal: Boolean = false,
     val localUri: String? = null,
     /** Set only for tracks pulled through the real-account TDLib login, not the bot. */
-    val tdFileId: Int? = null
+    val tdFileId: Int? = null,
+    /** e.g. "192kbps" or "FLAC" — best-effort, shown in the library list. */
+    val qualityLabel: String? = null
 )
