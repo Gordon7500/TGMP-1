@@ -94,7 +94,8 @@ class Store(context: Context) {
                     thumbFileId = o.optString("thumbFileId", null.toString()).takeIf { it != "null" },
                     sourceChat = o.optString("sourceChat", ""),
                     dateAdded = o.optLong("dateAdded", 0L),
-                    tdFileId = if (o.has("tdFileId") && !o.isNull("tdFileId")) o.getInt("tdFileId") else null
+                    tdFileId = if (o.has("tdFileId") && !o.isNull("tdFileId")) o.getInt("tdFileId") else null,
+                    qualityLabel = o.optString("qualityLabel", null.toString()).takeIf { it != "null" }
                 )
             }
         }
@@ -111,6 +112,7 @@ class Store(context: Context) {
                 o.put("sourceChat", t.sourceChat)
                 o.put("dateAdded", t.dateAdded)
                 t.tdFileId?.let { o.put("tdFileId", it) }
+                t.qualityLabel?.let { o.put("qualityLabel", it) }
                 arr.put(o)
             }
             prefs.edit().putString("tracks", arr.toString()).apply()
