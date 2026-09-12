@@ -116,7 +116,10 @@ private fun AppRoot(viewModel: PlayerViewModel) {
     }
 
     if (showTelegramLogin) {
-        TelegramLoginSheet(onDismiss = { showTelegramLogin = false })
+        TelegramLoginSheet(
+            onDismiss = { showTelegramLogin = false },
+            onTracksFetched = { tracks -> viewModel.addTelegramAccountTracks(tracks) }
+        )
     }
 
     if (showEqualizer) {
