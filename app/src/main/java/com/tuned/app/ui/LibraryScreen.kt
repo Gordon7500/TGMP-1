@@ -33,10 +33,9 @@ fun LibraryScreen(
     onOpenSettings: () -> Unit,
     onOpenEqualizer: () -> Unit,
     onConnectClick: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
     statusMessage: String?,
-    modifier: Modifier = Modifier,
-    onLocalStorageToggle: ((Boolean) -> Unit)? = null,
-    localStorageEnabled: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     var query by remember { mutableStateOf("") }
     var sortMenuOpen by remember { mutableStateOf(false) }
@@ -68,7 +67,8 @@ fun LibraryScreen(
                     }
                     DropdownMenu(
                         expanded = sortMenuOpen,
-                        onDismissRequest = { sortMenuOpen = false }
+                        onDismissRequest = { sortMenuOpen = false },
+                        containerColor = Surface2
                     ) {
                         SortOrder.entries.forEach { option ->
                             DropdownMenuItem(
@@ -97,7 +97,7 @@ fun LibraryScreen(
 
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = { query = it; onSearchQueryChange(it) },
             placeholder = { Text("Search your library", color = TextMuted) },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = TextMuted) },
             singleLine = true,
@@ -111,23 +111,6 @@ fun LibraryScreen(
                 unfocusedTextColor = TextPrimary
             )
         )
-
-        // Local Storage Toggle
-        if (onLocalStorageToggle != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 10.dp)
-                    .background(Surface, RoundedCornerShape(8.dp)).padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Local Storage", color = TextPrimary, fontSize = 14.sp)
-                Switch(
-                    checked = localStorageEnabled,
-                    onCheckedChange = { onLocalStorageToggle(it) },
-                    colors = SwitchDefaults.colors(checkedThumbColor = Cyan)
-                )
-            }
-        }
 
         statusMessage?.let {
             Box(
@@ -152,7 +135,7 @@ fun LibraryScreen(
                 Text("No tracks yet", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Connect your bot and pull music from your Telegram channels or enable local storage.",
+                    "Connect your bot and pull music from Telegram, or turn on local files in Settings.",
                     color = TextMuted, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
                 Spacer(Modifier.height(22.dp))
@@ -207,12 +190,17 @@ private fun TrackRow(track: Track, isPlaying: Boolean, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis
             )
         }
-        if (track.durationSec > 0) {
-            Text(
-                "%d:%02d".format(track.durationSec / 60, track.durationSec % 60),
-                color = TextMuted,
-                fontSize = 12.sp
-            )
+        Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+            if (track.durationSec > 0) {
+                Text(
+                    "%d:%02d".format(track.durationSec / 60, track.durationSec % 60),
+                    color = TextMuted,
+                    fontSize = 12.sp
+                )
+            }
+            track.qualityLabel?.let {
+                Text(it, color = Cyan, fontSize = 10.5.sp)
+            }
         }
     }
 }
