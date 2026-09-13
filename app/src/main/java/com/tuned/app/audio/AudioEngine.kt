@@ -27,7 +27,11 @@ import java.nio.ByteBuffer
  *   bit-perfect. The two features are fundamentally in tension; enabling EQ means you are, by
  *   definition, no longer getting an untouched signal, regardless of the direct-output setting.
  */
-class AudioEngine(private val router: OutputDeviceRouter, private val context: Context) {
+class AudioEngine(
+    private val router: OutputDeviceRouter,
+    private val context: Context,
+    private val equalizer: TenBandEqualizer
+) {
 
     enum class State { IDLE, PLAYING, PAUSED, ENDED, ERROR }
 
@@ -141,6 +145,7 @@ class AudioEngine(private val router: OutputDeviceRouter, private val context: C
         routing.preferredDevice?.let { track.preferredDevice = it }
         audioTrack = track
         onAudioSessionId?.invoke(track.audioSessionId)
+        equalizer.configure(routing.sampleRate, if (sourceChannels >= 2) 2 else 1)
         track.play()
         state = State.PLAYING
         onStateChanged?.invoke(state)
@@ -188,6 +193,7 @@ class AudioEngine(private val router: OutputDeviceRouter, private val context: C
                     val chunk = ByteArray(bufferInfo.size)
                     outputBuffer.position(bufferInfo.offset)
                     outputBuffer.get(chunk)
+                    equalizer.process(chunk, chunk.size)
                     track.write(chunk, 0, chunk.size)
                     reportAmplitude(chunk)
                     val posMs = (bufferInfo.presentationTimeUs / 1000)
