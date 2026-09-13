@@ -67,8 +67,7 @@ fun LibraryScreen(
                     }
                     DropdownMenu(
                         expanded = sortMenuOpen,
-                        onDismissRequest = { sortMenuOpen = false },
-                        containerColor = Surface2
+                        onDismissRequest = { sortMenuOpen = false }
                     ) {
                         SortOrder.entries.forEach { option ->
                             DropdownMenuItem(
