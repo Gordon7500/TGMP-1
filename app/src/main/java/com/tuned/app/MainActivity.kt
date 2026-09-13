@@ -66,6 +66,7 @@ private fun AppRoot(viewModel: PlayerViewModel) {
             onOpenSettings = { showSettings = true },
             onOpenEqualizer = { showEqualizer = true },
             onConnectClick = { showSettings = true },
+            onSearchQueryChange = { viewModel.onSearchQueryChanged(it) },
             statusMessage = state.statusMessage,
             modifier = Modifier.fillMaxSize()
         )
