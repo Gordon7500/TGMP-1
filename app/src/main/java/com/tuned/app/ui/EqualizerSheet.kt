@@ -46,7 +46,7 @@ fun EqualizerSheet(
             Spacer(Modifier.height(20.dp))
             SettingRow(
                 title = "Equalizer",
-                subtitle = if (bands.isEmpty()) "Play a track first — bands appear once audio starts." else null,
+                subtitle = null,
                 checked = equalizerEnabled,
                 onCheckedChange = onEqualizerEnabledChange,
                 enabled = bands.isNotEmpty()
