@@ -145,6 +145,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         )
     }
 
+    private var searchJob: kotlinx.coroutines.Job? = null
+
+    /** Called on every keystroke in the search bar. Debounced; only does anything if a TDLib
+     *  account session is active, since local/bot tracks are already filtered client-side. */
+    fun onSearchQueryChanged(query: String) {
+        searchJob?.cancel()
+        if (query.isBlank()) return
+        val auth = com.tuned.app.telegram.TdLibSessionManager.auth ?: return
+        searchJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(500)
+            try {
+                val results = auth.searchAudioByQuery(query)
+                if (results.isNotEmpty()) addTelegramAccountTracks(results)
+            } catch (_: Exception) {
+                // Live search is best-effort — a failed attempt shouldn't interrupt typing.
+            }
+        }
+    }
+
     /** Merges tracks pulled via the real-account TDLib login into the persisted library. */
     fun addTelegramAccountTracks(newTracks: List<Track>) {
         val known = store.tracks.map { it.fileUniqueId }.toSet()
