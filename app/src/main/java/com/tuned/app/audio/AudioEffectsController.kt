@@ -1,62 +1,49 @@
 package com.tuned.app.audio
 
 import android.media.audiofx.BassBoost
-import android.media.audiofx.Equalizer
 import com.tuned.app.data.Store
 
 /**
- * Attaches/re-attaches Equalizer and BassBoost effects whenever the audio session changes
- * (a new AudioTrack — and therefore a new session — is created on every track change in
- * AudioEngine). Settings are persisted in Store and reapplied automatically each time.
+ * Owns the custom 10-band equalizer (real DSP, see TenBandEqualizer) and the system BassBoost
+ * effect (which — unlike a graphic equalizer — Android's platform implementation handles well,
+ * so no need to reinvent that one). Settings are persisted in Store and reapplied automatically.
  *
- * Note: using these features means the signal is no longer bit-perfect/untouched — see the
- * doc comment on AudioEngine. That's inherent to what an equalizer does, not a bug here.
+ * Note: using either of these means the signal is no longer bit-perfect/untouched — see the
+ * doc comment on AudioEngine. That's inherent to what an equalizer/bass boost does, not a bug.
  */
 class AudioEffectsController(private val store: Store) {
 
-    private var equalizer: Equalizer? = null
+    val bandEqualizer = TenBandEqualizer()
+
     private var bassBoost: BassBoost? = null
     private var currentSessionId: Int = -1
 
-    val numberOfBands: Int
-        get() = equalizer?.numberOfBands?.toInt() ?: 0
+    val numberOfBands: Int get() = TenBandEqualizer.BAND_COUNT
 
     fun bandFrequencyLabel(band: Int): String {
-        val eq = equalizer ?: return ""
-        val centerFreqHz = eq.getCenterFreq(band.toShort()) / 1000
-        return if (centerFreqHz >= 1000) "${centerFreqHz / 1000}kHz" else "${centerFreqHz}Hz"
+        val hz = TenBandEqualizer.FREQUENCIES.getOrNull(band) ?: return ""
+        return if (hz >= 1000) "${hz / 1000}kHz" else "${hz}Hz"
     }
 
-    fun bandLevelRangeMb(): IntRange {
-        val eq = equalizer ?: return -1500..1500
-        val range = eq.bandLevelRange
-        return range[0].toInt()..range[1].toInt()
+    fun bandLevelRangeMb(): IntRange = TenBandEqualizer.MIN_GAIN_DB..TenBandEqualizer.MAX_GAIN_DB
+
+    init {
+        bandEqualizer.enabled = store.equalizerEnabled
+        val savedLevels = store.equalizerBandLevels
+        if (savedLevels.size == TenBandEqualizer.BAND_COUNT) {
+            savedLevels.forEachIndexed { i, level -> bandEqualizer.setBandGain(i, level) }
+        } else {
+            store.equalizerBandLevels = List(TenBandEqualizer.BAND_COUNT) { 0 }
+        }
     }
 
-    /** Call whenever AudioEngine reports a new session ID (i.e. on every new track). */
+    /** Call whenever AudioEngine reports a new session ID (i.e. on every new track) — only
+     *  BassBoost needs this; the custom equalizer is reconfigured directly by AudioEngine
+     *  itself since it needs the exact sample rate, not just a session id. */
     fun onSessionIdChanged(sessionId: Int) {
         if (sessionId == currentSessionId || sessionId == 0) return
-        release()
+        bassBoost?.release()
         currentSessionId = sessionId
-
-        try {
-            val eq = Equalizer(0, sessionId)
-            equalizer = eq
-            val savedLevels = store.equalizerBandLevels
-            if (savedLevels.size == eq.numberOfBands.toInt()) {
-                savedLevels.forEachIndexed { i, level ->
-                    try { eq.setBandLevel(i.toShort(), level.toShort()) } catch (_: Exception) {}
-                }
-            } else {
-                // First run on this device: capture the default band layout so the UI has
-                // something to show and store it as the baseline (all bands flat).
-                val flat = List(eq.numberOfBands.toInt()) { 0 }
-                store.equalizerBandLevels = flat
-            }
-            eq.enabled = store.equalizerEnabled
-        } catch (_: Exception) {
-            equalizer = null
-        }
 
         try {
             val bb = BassBoost(0, sessionId)
@@ -70,19 +57,18 @@ class AudioEffectsController(private val store: Store) {
 
     fun setEqualizerEnabled(enabled: Boolean) {
         store.equalizerEnabled = enabled
-        equalizer?.enabled = enabled
+        bandEqualizer.enabled = enabled
     }
 
-    fun setBandLevel(band: Int, levelMb: Int) {
-        equalizer?.setBandLevel(band.toShort(), levelMb.toShort())
+    fun setBandLevel(band: Int, levelDb: Int) {
+        bandEqualizer.setBandGain(band, levelDb)
         val levels = store.equalizerBandLevels.toMutableList()
         while (levels.size <= band) levels.add(0)
-        levels[band] = levelMb
+        levels[band] = levelDb
         store.equalizerBandLevels = levels
     }
 
-    fun currentBandLevel(band: Int): Int =
-        try { equalizer?.getBandLevel(band.toShort())?.toInt() ?: 0 } catch (_: Exception) { 0 }
+    fun currentBandLevel(band: Int): Int = bandEqualizer.getBandGain(band)
 
     fun setBassBoostEnabled(enabled: Boolean) {
         store.bassBoostEnabled = enabled
@@ -95,8 +81,6 @@ class AudioEffectsController(private val store: Store) {
     }
 
     fun release() {
-        equalizer?.release()
-        equalizer = null
         bassBoost?.release()
         bassBoost = null
     }
