@@ -26,11 +26,15 @@ import java.nio.ByteBuffer
  *   signal processing to the samples before they reach the DAC — that's the direct opposite of
  *   bit-perfect. The two features are fundamentally in tension; enabling EQ means you are, by
  *   definition, no longer getting an untouched signal, regardless of the direct-output setting.
+ * - When exclusive USB mode (see UsbAudioOutput) is active and connected, this bypasses
+ *   AudioTrack/the OS mixer entirely for genuine bit-perfect output — but bass boost has no
+ *   effect in that mode, since it relies on an AudioTrack session that doesn't exist there.
  */
 class AudioEngine(
     private val router: OutputDeviceRouter,
     private val context: Context,
-    private val equalizer: TenBandEqualizer
+    private val equalizer: TenBandEqualizer,
+    private val usbAudioOutput: com.tuned.app.usb.UsbAudioOutput
 ) {
 
     enum class State { IDLE, PLAYING, PAUSED, ENDED, ERROR }
@@ -78,6 +82,7 @@ class AudioEngine(
             try { it.pause(); it.flush(); it.release() } catch (_: Exception) {}
         }
         audioTrack = null
+        if (usbAudioOutput.isActive) usbAudioOutput.disconnect()
         state = State.IDLE
     }
 
@@ -116,6 +121,26 @@ class AudioEngine(
         codec.start()
 
         val channelConfig = if (sourceChannels >= 2) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
+
+        // Try exclusive USB output first — bypasses AudioTrack/the OS mixer entirely. Falls
+        // through to the normal AudioTrack path below if no device, no permission, or the
+        // device doesn't support a usable 16-bit format near this source's sample rate.
+        var usbActive = false
+        if (directOutputPreferred) {
+            val device = usbAudioOutput.findCandidateDevice()
+            if (device != null && usbAudioOutput.hasPermission(device)) {
+                usbActive = try {
+                    usbAudioOutput.connect(device, sourceSampleRate)
+                } catch (_: Exception) {
+                    false
+                }
+            }
+        }
+
+        if (usbActive) {
+            playViaUsb(extractor, codec, sourceChannels)
+            return
+        }
 
         // Ask the router for the best matching output device + sample rate (USB DAC if present).
         val routing = router.resolve(sourceSampleRate, directOutputPreferred)
@@ -193,7 +218,12 @@ class AudioEngine(
                     val chunk = ByteArray(bufferInfo.size)
                     outputBuffer.position(bufferInfo.offset)
                     outputBuffer.get(chunk)
-                    equalizer.process(chunk, chunk.size)
+                    try {
+                        equalizer.process(chunk, chunk.size)
+                    } catch (_: Exception) {
+                        // If the EQ hits a problem, play the unprocessed chunk rather than
+                        // letting it take playback down with it.
+                    }
                     track.write(chunk, 0, chunk.size)
                     reportAmplitude(chunk)
                     val posMs = (bufferInfo.presentationTimeUs / 1000)
@@ -214,6 +244,79 @@ class AudioEngine(
         extractor.release()
         track.stop()
         track.release()
+    }
+
+    private suspend fun playViaUsb(extractor: MediaExtractor, codec: MediaCodec, sourceChannels: Int) {
+        val connectedFormat = usbAudioOutput.connectedFormat
+        equalizer.configure(connectedFormat?.sampleRate ?: 44100, if (sourceChannels >= 2) 2 else 1)
+        state = State.PLAYING
+        onStateChanged?.invoke(state)
+
+        val bufferInfo = MediaCodec.BufferInfo()
+        var inputDone = false
+        var outputDone = false
+
+        try {
+            while (!outputDone && currentCoroutineContext().isActive) {
+
+                if (pauseRequested) {
+                    state = State.PAUSED
+                    onStateChanged?.invoke(state)
+                    while (pauseRequested && currentCoroutineContext().isActive) delay(80)
+                    continue
+                }
+
+                seekRequestedMs?.let { targetMs ->
+                    seekRequestedMs = null
+                    extractor.seekTo(targetMs * 1000, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+                    codec.flush()
+                }
+
+                if (!inputDone) {
+                    val inIndex = codec.dequeueInputBuffer(10_000)
+                    if (inIndex >= 0) {
+                        val inputBuffer: ByteBuffer? = codec.getInputBuffer(inIndex)
+                        val sampleSize = inputBuffer?.let { extractor.readSampleData(it, 0) } ?: -1
+                        if (sampleSize < 0) {
+                            codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            inputDone = true
+                        } else {
+                            codec.queueInputBuffer(inIndex, 0, sampleSize, extractor.sampleTime, 0)
+                            extractor.advance()
+                        }
+                    }
+                }
+
+                val outIndex = codec.dequeueOutputBuffer(bufferInfo, 10_000)
+                if (outIndex >= 0) {
+                    val outputBuffer = codec.getOutputBuffer(outIndex)
+                    if (outputBuffer != null && bufferInfo.size > 0) {
+                        val chunk = ByteArray(bufferInfo.size)
+                        outputBuffer.position(bufferInfo.offset)
+                        outputBuffer.get(chunk)
+                        try {
+                            equalizer.process(chunk, chunk.size)
+                        } catch (_: Exception) {
+                        }
+                        usbAudioOutput.write(chunk)
+                        reportAmplitude(chunk)
+                        val posMs = (bufferInfo.presentationTimeUs / 1000)
+                        onProgress?.invoke(posMs, currentDurationMs)
+                    }
+                    codec.releaseOutputBuffer(outIndex, false)
+                    if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                        outputDone = true
+                    }
+                }
+            }
+        } finally {
+            state = State.ENDED
+            onStateChanged?.invoke(state)
+            codec.stop()
+            codec.release()
+            extractor.release()
+            usbAudioOutput.disconnect()
+        }
     }
 
     private fun reportAmplitude(chunk: ByteArray) {
