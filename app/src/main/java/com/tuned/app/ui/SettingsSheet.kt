@@ -14,8 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tuned.app.usb.UsbAudioOutput
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,6 +139,11 @@ fun SettingsSheet(
                 )
             }
 
+            if (directOutput) {
+                Spacer(Modifier.height(14.dp))
+                UsbAccessRow()
+            }
+
             Spacer(Modifier.height(22.dp))
             Row(
                 Modifier.fillMaxWidth(),
@@ -191,6 +199,59 @@ private fun fieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = TextPrimary,
     unfocusedTextColor = TextPrimary
 )
+
+@Composable
+private fun UsbAccessRow() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<String?>(null) }
+    var checking by remember { mutableStateOf(false) }
+
+    Column {
+        Text(
+            "Exclusive USB DAC access (experimental)",
+            color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            "For DACs that support it, this bypasses Android's audio system entirely for the " +
+                "closest thing to guaranteed bit-perfect output. This is the least-tested part " +
+                "of the whole app — if it doesn't work with your DAC, direct output above still " +
+                "works normally on its own.",
+            color = TextMuted, fontSize = 11.5.sp, modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
+        )
+        Button(
+            onClick = {
+                checking = true
+                status = "Looking for a connected DAC…"
+                scope.launch {
+                    val usb = UsbAudioOutput(context.applicationContext)
+                    val device = usb.findCandidateDevice()
+                    if (device == null) {
+                        status = "No USB audio device detected. Make sure your DAC is connected."
+                        checking = false
+                        return@launch
+                    }
+                    if (usb.hasPermission(device)) {
+                        status = "Access already granted for this DAC."
+                        checking = false
+                        return@launch
+                    }
+                    status = "Requesting access…"
+                    val granted = usb.requestPermission(device)
+                    status = if (granted) "Access granted — it'll be used automatically when you play a track."
+                        else "Access denied."
+                    checking = false
+                }
+            },
+            enabled = !checking,
+            colors = ButtonDefaults.buttonColors(containerColor = Surface2)
+        ) { Text(if (checking) "Working…" else "Grant USB DAC access", color = TextPrimary) }
+
+        status?.let {
+            Text(it, color = TextMuted, fontSize = 11.5.sp, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
 
 /**
  * Turns whatever the user pasted — a t.me link, @username, plain username, or a numeric
