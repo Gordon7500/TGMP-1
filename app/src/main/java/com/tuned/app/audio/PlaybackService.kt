@@ -13,11 +13,15 @@ import androidx.media.app.NotificationCompat.MediaStyle
 import androidx.media.session.MediaButtonReceiver
 import com.tuned.app.data.Store
 import com.tuned.app.data.Track
+import com.tuned.app.telegram.TdAuthState
+import com.tuned.app.telegram.TdLibSessionManager
 import com.tuned.app.telegram.TelegramClient
+import com.tuned.app.telegram.TelegramUserAuth
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 
 data class ServicePlaybackState(
     val currentTrack: Track? = null,
@@ -54,7 +58,12 @@ class PlaybackService : Service() {
         super.onCreate()
         store = Store(applicationContext)
         effects = AudioEffectsController(store)
-        engine = AudioEngine(OutputDeviceRouter(applicationContext), applicationContext, effects.bandEqualizer)
+        engine = AudioEngine(
+            OutputDeviceRouter(applicationContext),
+            applicationContext,
+            effects.bandEqualizer,
+            com.tuned.app.usb.UsbAudioOutput(applicationContext)
+        )
         engine.onStateChanged = { s -> onEngineStateChanged(s) }
         engine.onProgress = { pos, dur ->
             _state.value = _state.value.copy(positionMs = pos, durationMs = dur)
@@ -114,12 +123,22 @@ class PlaybackService : Service() {
 
         if (track.tdFileId != null) {
             serviceScope.launch {
-                val auth = com.tuned.app.telegram.TdLibSessionManager.auth
+                val auth = ensureTdAuth()
                 if (auth == null) {
-                    _state.value = _state.value.copy(statusMessage = "Telegram account session isn't active — open Settings and log in again.")
+                    _state.value = _state.value.copy(statusMessage = "Telegram account isn't set up — open Settings to log in.")
                     return@launch
                 }
-                val path = auth.resolveLocalFilePath(track.tdFileId)
+                val ready = waitForReady(auth, timeoutMs = 15_000)
+                if (!ready) {
+                    _state.value = _state.value.copy(statusMessage = "Telegram account session isn't ready yet — try again in a moment.")
+                    return@launch
+                }
+                val path = try {
+                    auth.resolveLocalFilePath(track.tdFileId)
+                } catch (e: Exception) {
+                    _state.value = _state.value.copy(statusMessage = "Couldn't download this track: ${e.message}")
+                    return@launch
+                }
                 if (path == null) {
                     _state.value = _state.value.copy(statusMessage = "Couldn't download this track.")
                     return@launch
@@ -140,6 +159,25 @@ class PlaybackService : Service() {
                 _state.value = _state.value.copy(statusMessage = "Couldn't play track: ${e.message}")
             }
         }
+    }
+
+    /** Recreates the TDLib session from saved credentials if it's missing (e.g. after the app's
+     *  process was restarted by Android and the in-memory session was lost) instead of just
+     *  failing and telling the user to log in again when they never actually logged out. */
+    private fun ensureTdAuth(): TelegramUserAuth? {
+        TdLibSessionManager.auth?.let { return it }
+        if (store.tdApiId == 0 || store.tdApiHash.isBlank()) return null
+        return TdLibSessionManager.getOrCreate(applicationContext, store.tdApiId, store.tdApiHash)
+    }
+
+    /** A freshly (re)created session needs a moment to restore itself from disk before it's
+     *  usable — this waits for that instead of failing immediately. */
+    private suspend fun waitForReady(auth: TelegramUserAuth, timeoutMs: Long): Boolean {
+        if (auth.authState.value is TdAuthState.Ready) return true
+        val result = withTimeoutOrNull(timeoutMs) {
+            auth.authState.first { it is TdAuthState.Ready || it is TdAuthState.Error }
+        }
+        return result is TdAuthState.Ready
     }
 
     private fun onEngineStateChanged(s: AudioEngine.State) {
