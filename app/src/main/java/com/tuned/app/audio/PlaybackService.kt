@@ -117,7 +117,7 @@ class PlaybackService : Service() {
 
         if (track.isLocal && track.localUri != null) {
             _state.value = _state.value.copy(statusMessage = null)
-            engine.play(track.localUri, store.directOutputEnabled, serviceScope)
+            engine.play(track.localUri, store.directOutputEnabled, store.usbExclusiveEnabled, serviceScope)
             return
         }
 
@@ -144,7 +144,7 @@ class PlaybackService : Service() {
                     return@launch
                 }
                 _state.value = _state.value.copy(statusMessage = null)
-                engine.play(path, store.directOutputEnabled, serviceScope)
+                engine.play(path, store.directOutputEnabled, store.usbExclusiveEnabled, serviceScope)
             }
             return
         }
@@ -154,7 +154,7 @@ class PlaybackService : Service() {
                 val client = TelegramClient(store.botToken)
                 val url = client.resolveFileUrl(track.fileId)
                 _state.value = _state.value.copy(statusMessage = null)
-                engine.play(url, store.directOutputEnabled, serviceScope)
+                engine.play(url, store.directOutputEnabled, store.usbExclusiveEnabled, serviceScope)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(statusMessage = "Couldn't play track: ${e.message}")
             }
