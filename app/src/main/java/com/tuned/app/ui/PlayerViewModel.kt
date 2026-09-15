@@ -34,6 +34,7 @@ data class UiState(
     val positionMs: Long = 0,
     val durationMs: Long = 0,
     val amplitude: Int = 0,
+    val formatLabel: String? = null,
     val statusMessage: String? = null,
     val isSyncing: Boolean = false,
     val equalizerEnabled: Boolean = false,
@@ -125,6 +126,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             positionMs = p.positionMs,
             durationMs = p.durationMs,
             amplitude = p.amplitude,
+            formatLabel = p.formatLabel,
             statusMessage = p.statusMessage ?: _state.value.statusMessage
         )
         if (p.currentTrack?.fileUniqueId != lastAppliedTrackId && _state.value.equalizerBands.isEmpty()) {
