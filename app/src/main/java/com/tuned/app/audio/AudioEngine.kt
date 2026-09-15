@@ -46,6 +46,7 @@ class AudioEngine(
     var onProgress: ((positionMs: Long, durationMs: Long) -> Unit)? = null
     var onAmplitude: ((Int) -> Unit)? = null // 0-32767, for the visualizer
     var onAudioSessionId: ((Int) -> Unit)? = null // fires once per playback start; needed to attach effects
+    var onFormatInfo: ((sampleRateHz: Int, bitDepth: Int, channels: Int) -> Unit)? = null
 
     private var job: Job? = null
     private var audioTrack: AudioTrack? = null
@@ -121,6 +122,9 @@ class AudioEngine(
         codec.start()
 
         val channelConfig = if (sourceChannels >= 2) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
+
+        val bitsPerSample = if (format.containsKey("bits-per-sample")) format.getInteger("bits-per-sample") else 16
+        onFormatInfo?.invoke(sourceSampleRate, bitsPerSample, sourceChannels)
 
         // Try exclusive USB output first — bypasses AudioTrack/the OS mixer entirely. Falls
         // through to the normal AudioTrack path below if no device, no permission, or the
