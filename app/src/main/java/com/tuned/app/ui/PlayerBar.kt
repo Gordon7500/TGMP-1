@@ -27,6 +27,7 @@ fun PlayerBar(
     positionMs: Long,
     durationMs: Long,
     amplitude: Int,
+    formatLabel: String?,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrev: () -> Unit,
@@ -59,10 +60,18 @@ fun PlayerBar(
                         track.title, color = TextPrimary, fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        track.artist, color = TextMuted, fontSize = 12.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
+                    Row {
+                        Text(
+                            track.artist, color = TextMuted, fontSize = 12.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                        formatLabel?.let {
+                            Text(
+                                " · $it", color = Cyan, fontSize = 11.sp,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
             }
 
