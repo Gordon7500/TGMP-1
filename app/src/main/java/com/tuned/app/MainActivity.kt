@@ -78,6 +78,7 @@ private fun AppRoot(viewModel: PlayerViewModel) {
                 positionMs = state.positionMs,
                 durationMs = state.durationMs,
                 amplitude = state.amplitude,
+                formatLabel = state.formatLabel,
                 onPlayPause = { viewModel.togglePlayPause() },
                 onNext = { viewModel.playAdjacent(1) },
                 onPrev = { viewModel.playAdjacent(-1) },
