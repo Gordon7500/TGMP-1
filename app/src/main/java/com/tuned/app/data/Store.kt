@@ -23,6 +23,12 @@ class Store(context: Context) {
         get() = prefs.getBoolean("direct_output", true)
         set(value) = prefs.edit().putBoolean("direct_output", value).apply()
 
+    /** Off by default — this experimental feature must never activate unless explicitly
+     *  turned on, since a failure here should not be able to affect normal playback at all. */
+    var usbExclusiveEnabled: Boolean
+        get() = prefs.getBoolean("usb_exclusive_enabled", false)
+        set(value) = prefs.edit().putBoolean("usb_exclusive_enabled", value).apply()
+
     var localStorageEnabled: Boolean
         get() = prefs.getBoolean("local_storage_enabled", false)
         set(value) = prefs.edit().putBoolean("local_storage_enabled", value).apply()
