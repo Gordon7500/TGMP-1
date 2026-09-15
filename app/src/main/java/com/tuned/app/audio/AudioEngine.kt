@@ -53,11 +53,11 @@ class AudioEngine(
     private var seekRequestedMs: Long? = null
     private var currentDurationMs: Long = 0
 
-    fun play(url: String, directOutputPreferred: Boolean, scope: CoroutineScope) {
+    fun play(url: String, directOutputPreferred: Boolean, usbExclusiveEnabled: Boolean, scope: CoroutineScope) {
         stop()
         job = scope.launch(Dispatchers.IO) {
             try {
-                playInternal(url, directOutputPreferred)
+                playInternal(url, directOutputPreferred, usbExclusiveEnabled)
             } catch (t: Throwable) {
                 state = State.ERROR
                 onStateChanged?.invoke(state)
@@ -86,7 +86,7 @@ class AudioEngine(
         state = State.IDLE
     }
 
-    private suspend fun playInternal(url: String, directOutputPreferred: Boolean) {
+    private suspend fun playInternal(url: String, directOutputPreferred: Boolean, usbExclusiveEnabled: Boolean) {
         val extractor = MediaExtractor()
         if (url.startsWith("content://")) {
             extractor.setDataSource(context, Uri.parse(url), null)
@@ -126,7 +126,7 @@ class AudioEngine(
         // through to the normal AudioTrack path below if no device, no permission, or the
         // device doesn't support a usable 16-bit format near this source's sample rate.
         var usbActive = false
-        if (directOutputPreferred) {
+        if (usbExclusiveEnabled) {
             val device = usbAudioOutput.findCandidateDevice()
             if (device != null && usbAudioOutput.hasPermission(device)) {
                 usbActive = try {
