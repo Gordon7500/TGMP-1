@@ -297,21 +297,42 @@ class TelegramUserAuth(
     }
 
     /** Downloads (if needed) and returns the local file path for a TDLib-sourced track. */
+    /** Returns the local file path, or throws with a specific reason if it couldn't be
+     *  downloaded — retries once automatically since a single failed attempt on a large file
+     *  isn't necessarily a permanent problem. */
     suspend fun resolveLocalFilePath(tdFileId: Int): String? {
-        val result = sendForResult(
-            JSONObject().apply {
-                put("@type", "downloadFile")
-                put("file_id", tdFileId)
-                put("priority", 1)
-                put("offset", 0)
-                put("limit", 0)
-                put("synchronous", true)
-            },
-            timeoutMs = 120_000 // large audio files can take a while
-        ) ?: return null
+        repeat(2) { attempt ->
+            val result = sendForResult(
+                JSONObject().apply {
+                    put("@type", "downloadFile")
+                    put("file_id", tdFileId)
+                    put("priority", 1)
+                    put("offset", 0)
+                    put("limit", 0)
+                    put("synchronous", true)
+                },
+                timeoutMs = 120_000 // large audio files can take a while
+            )
 
-        val local = result.optJSONObject("local") ?: return null
-        if (!local.optBoolean("is_downloading_completed", false)) return null
-        return local.optString("path").takeIf { it.isNotBlank() }
+            if (result == null) {
+                if (attempt == 1) throw Exception("Download timed out")
+                return@repeat // retry
+            }
+
+            if (result.optString("@type") == "error") {
+                val message = result.optString("message", "Unknown error")
+                if (attempt == 1) throw Exception(message)
+                return@repeat // retry
+            }
+
+            val local = result.optJSONObject("local")
+            if (local != null && local.optBoolean("is_downloading_completed", false)) {
+                val path = local.optString("path").takeIf { it.isNotBlank() }
+                if (path != null) return path
+            }
+
+            if (attempt == 1) throw Exception("File wasn't fully downloaded")
+        }
+        return null
     }
 }
