@@ -29,7 +29,8 @@ data class ServicePlaybackState(
     val positionMs: Long = 0,
     val durationMs: Long = 0,
     val amplitude: Int = 0,
-    val statusMessage: String? = null
+    val statusMessage: String? = null,
+    val formatLabel: String? = null
 )
 
 class PlaybackService : Service() {
@@ -71,6 +72,11 @@ class PlaybackService : Service() {
         }
         engine.onAmplitude = { amp -> _state.value = _state.value.copy(amplitude = amp) }
         engine.onAudioSessionId = { id -> effects.onSessionIdChanged(id) }
+        engine.onFormatInfo = { sampleRateHz, bitDepth, channels ->
+            val khz = sampleRateHz / 1000.0
+            val khzText = if (khz == khz.toInt().toDouble()) "${khz.toInt()}kHz" else "${"%.1f".format(khz)}kHz"
+            _state.value = _state.value.copy(formatLabel = "$bitDepth-bit / $khzText")
+        }
 
         createNotificationChannel()
         setupMediaSession()
@@ -111,7 +117,7 @@ class PlaybackService : Service() {
 
     private fun playCurrent() {
         val track = queue.getOrNull(currentIndex) ?: return
-        _state.value = _state.value.copy(currentTrack = track, statusMessage = "Loading track…")
+        _state.value = _state.value.copy(currentTrack = track, statusMessage = "Loading track…", formatLabel = null)
         updateMetadata(track)
         startForegroundIfNeeded(track)
 
