@@ -238,6 +238,9 @@ private fun UsbAccessRow() {
                     }
                     status = "Requesting access…"
                     val granted = usb.requestPermission(device)
+                    if (granted) {
+                        com.tuned.app.data.Store(context.applicationContext).usbExclusiveEnabled = true
+                    }
                     status = if (granted) "Access granted — it'll be used automatically when you play a track."
                         else "Access denied."
                     checking = false
