@@ -9,6 +9,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.util.UUID
@@ -37,6 +39,11 @@ class TelegramUserAuth(
     private val client = TdJsonClient()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pending = ConcurrentHashMap<String, CompletableDeferred<JSONObject>>()
+    // Serializes every single outgoing request. Overlapping calls into the native TDLib layer
+    // (e.g. a second search starting before the first one's sequence of requests has fully
+    // finished) is the most likely cause of a native-level crash that a Kotlin try/catch can't
+    // stop — this makes that impossible by construction, regardless of the exact trigger.
+    private val requestMutex = Mutex()
 
     private val _authState = MutableStateFlow<TdAuthState>(TdAuthState.Connecting)
     val authState: StateFlow<TdAuthState> = _authState
@@ -84,18 +91,19 @@ class TelegramUserAuth(
     }
 
     /** Sends a request and suspends until its specific reply arrives (or times out). */
-    private suspend fun sendForResult(request: JSONObject, timeoutMs: Long = 20_000): JSONObject? {
-        val extra = UUID.randomUUID().toString()
-        request.put("@extra", extra)
-        val deferred = CompletableDeferred<JSONObject>()
-        pending[extra] = deferred
-        try {
-            client.send(request.toString())
-            return withTimeoutOrNull(timeoutMs) { deferred.await() }
-        } finally {
-            pending.remove(extra)
+    private suspend fun sendForResult(request: JSONObject, timeoutMs: Long = 20_000): JSONObject? =
+        requestMutex.withLock {
+            val extra = UUID.randomUUID().toString()
+            request.put("@extra", extra)
+            val deferred = CompletableDeferred<JSONObject>()
+            pending[extra] = deferred
+            try {
+                client.send(request.toString())
+                withTimeoutOrNull(timeoutMs) { deferred.await() }
+            } finally {
+                pending.remove(extra)
+            }
         }
-    }
 
     private fun sendTdlibParameters() {
         val dir = context.filesDir.absolutePath + "/tdlib"
