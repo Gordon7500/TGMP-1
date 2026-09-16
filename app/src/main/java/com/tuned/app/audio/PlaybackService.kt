@@ -127,7 +127,7 @@ class PlaybackService : Service() {
             return
         }
 
-        if (track.tdFileId != null) {
+        if (track.tdChatId != null && track.tdMessageId != null) {
             serviceScope.launch {
                 val auth = ensureTdAuth()
                 if (auth == null) {
@@ -140,7 +140,7 @@ class PlaybackService : Service() {
                     return@launch
                 }
                 val path = try {
-                    auth.resolveLocalFilePath(track.tdFileId)
+                    auth.resolveLocalFilePathForMessage(track.tdChatId, track.tdMessageId)
                 } catch (e: Exception) {
                     _state.value = _state.value.copy(statusMessage = "Couldn't download this track: ${e.message}")
                     return@launch
