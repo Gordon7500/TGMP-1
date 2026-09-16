@@ -55,8 +55,13 @@ class AudioEngine(
     private var currentDurationMs: Long = 0
 
     fun play(url: String, directOutputPreferred: Boolean, usbExclusiveEnabled: Boolean, scope: CoroutineScope) {
-        stop()
+        val previousJob = job
         job = scope.launch(Dispatchers.IO) {
+            // Wait for the previous track's playback coroutine to fully release its own
+            // AudioTrack/codec on its own thread before we touch anything new — releasing an
+            // AudioTrack from a different thread while it's still mid-write is what was
+            // crashing the app when switching tracks quickly.
+            previousJob?.cancelAndJoin()
             try {
                 playInternal(url, directOutputPreferred, usbExclusiveEnabled)
             } catch (t: Throwable) {
@@ -79,11 +84,6 @@ class AudioEngine(
     fun stop() {
         job?.cancel()
         job = null
-        audioTrack?.let {
-            try { it.pause(); it.flush(); it.release() } catch (_: Exception) {}
-        }
-        audioTrack = null
-        if (usbAudioOutput.isActive) usbAudioOutput.disconnect()
         state = State.IDLE
     }
 
@@ -183,71 +183,80 @@ class AudioEngine(
         var inputDone = false
         var outputDone = false
 
-        while (!outputDone && currentCoroutineContext().isActive) {
+        try {
+            while (!outputDone && currentCoroutineContext().isActive) {
 
-            if (pauseRequested) {
-                track.pause()
-                state = State.PAUSED
-                onStateChanged?.invoke(state)
-                while (pauseRequested && currentCoroutineContext().isActive) delay(80)
-                continue
-            }
+                if (pauseRequested) {
+                    track.pause()
+                    state = State.PAUSED
+                    onStateChanged?.invoke(state)
+                    while (pauseRequested && currentCoroutineContext().isActive) delay(80)
+                    continue
+                }
 
-            seekRequestedMs?.let { targetMs ->
-                seekRequestedMs = null
-                extractor.seekTo(targetMs * 1000, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
-                codec.flush()
-                track.flush()
-            }
+                seekRequestedMs?.let { targetMs ->
+                    seekRequestedMs = null
+                    extractor.seekTo(targetMs * 1000, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+                    codec.flush()
+                    track.flush()
+                }
 
-            if (!inputDone) {
-                val inIndex = codec.dequeueInputBuffer(10_000)
-                if (inIndex >= 0) {
-                    val inputBuffer: ByteBuffer? = codec.getInputBuffer(inIndex)
-                    val sampleSize = inputBuffer?.let { extractor.readSampleData(it, 0) } ?: -1
-                    if (sampleSize < 0) {
-                        codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        inputDone = true
-                    } else {
-                        codec.queueInputBuffer(inIndex, 0, sampleSize, extractor.sampleTime, 0)
-                        extractor.advance()
+                if (!inputDone) {
+                    val inIndex = codec.dequeueInputBuffer(10_000)
+                    if (inIndex >= 0) {
+                        val inputBuffer: ByteBuffer? = codec.getInputBuffer(inIndex)
+                        val sampleSize = inputBuffer?.let { extractor.readSampleData(it, 0) } ?: -1
+                        if (sampleSize < 0) {
+                            codec.queueInputBuffer(inIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            inputDone = true
+                        } else {
+                            codec.queueInputBuffer(inIndex, 0, sampleSize, extractor.sampleTime, 0)
+                            extractor.advance()
+                        }
+                    }
+                }
+
+                val outIndex = codec.dequeueOutputBuffer(bufferInfo, 10_000)
+                if (outIndex >= 0) {
+                    val outputBuffer = codec.getOutputBuffer(outIndex)
+                    if (outputBuffer != null && bufferInfo.size > 0) {
+                        val chunk = ByteArray(bufferInfo.size)
+                        outputBuffer.position(bufferInfo.offset)
+                        outputBuffer.get(chunk)
+                        try {
+                            equalizer.process(chunk, chunk.size)
+                        } catch (_: Exception) {
+                            // If the EQ hits a problem, play the unprocessed chunk rather than
+                            // letting it take playback down with it.
+                        }
+                        track.write(chunk, 0, chunk.size)
+                        reportAmplitude(chunk)
+                        val posMs = (bufferInfo.presentationTimeUs / 1000)
+                        onProgress?.invoke(posMs, currentDurationMs)
+                    }
+                    codec.releaseOutputBuffer(outIndex, false)
+                    if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                        outputDone = true
                     }
                 }
             }
 
-            val outIndex = codec.dequeueOutputBuffer(bufferInfo, 10_000)
-            if (outIndex >= 0) {
-                val outputBuffer = codec.getOutputBuffer(outIndex)
-                if (outputBuffer != null && bufferInfo.size > 0) {
-                    val chunk = ByteArray(bufferInfo.size)
-                    outputBuffer.position(bufferInfo.offset)
-                    outputBuffer.get(chunk)
-                    try {
-                        equalizer.process(chunk, chunk.size)
-                    } catch (_: Exception) {
-                        // If the EQ hits a problem, play the unprocessed chunk rather than
-                        // letting it take playback down with it.
-                    }
-                    track.write(chunk, 0, chunk.size)
-                    reportAmplitude(chunk)
-                    val posMs = (bufferInfo.presentationTimeUs / 1000)
-                    onProgress?.invoke(posMs, currentDurationMs)
-                }
-                codec.releaseOutputBuffer(outIndex, false)
-                if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-                    outputDone = true
-                }
-            }
+            state = State.ENDED
+            onStateChanged?.invoke(state)
+        } finally {
+            // Runs exactly once no matter how we got here — normal completion, cancellation
+            // while active, or cancellation while paused (which throws through the delay()
+            // above and would otherwise skip this entirely). This is the only place that's
+            // allowed to release this track/codec, and it always runs on this coroutine's own
+            // thread — never reached into from another thread, which is what used to crash the
+            // app when switching tracks quickly.
+            try { codec.stop() } catch (_: Exception) {}
+            try { codec.release() } catch (_: Exception) {}
+            try { extractor.release() } catch (_: Exception) {}
+            try { track.stop() } catch (_: Exception) {}
+            try { track.release() } catch (_: Exception) {}
+            if (audioTrack === track) audioTrack = null
         }
-
-        state = State.ENDED
-        onStateChanged?.invoke(state)
-
-        codec.stop()
-        codec.release()
-        extractor.release()
-        track.stop()
-        track.release()
     }
 
     private suspend fun playViaUsb(extractor: MediaExtractor, codec: MediaCodec, sourceChannels: Int) {
