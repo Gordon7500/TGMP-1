@@ -89,10 +89,12 @@ class TelegramUserAuth(
         request.put("@extra", extra)
         val deferred = CompletableDeferred<JSONObject>()
         pending[extra] = deferred
-        client.send(request.toString())
-        val result = withTimeoutOrNull(timeoutMs) { deferred.await() }
-        pending.remove(extra)
-        return result
+        try {
+            client.send(request.toString())
+            return withTimeoutOrNull(timeoutMs) { deferred.await() }
+        } finally {
+            pending.remove(extra)
+        }
     }
 
     private fun sendTdlibParameters() {
@@ -169,7 +171,8 @@ class TelegramUserAuth(
             thumbFileId = null,
             sourceChat = chatTitle,
             dateAdded = msg.optLong("date", System.currentTimeMillis() / 1000),
-            tdFileId = tdFileId,
+            tdChatId = chatId,
+            tdMessageId = msg.optLong("id"),
             qualityLabel = com.tuned.app.data.QualityLabel.estimate(fileName, mimeType, sizeBytes, durationSec)
         )
     }
@@ -296,16 +299,44 @@ class TelegramUserAuth(
         return found
     }
 
-    /** Downloads (if needed) and returns the local file path for a TDLib-sourced track. */
-    /** Returns the local file path, or throws with a specific reason if it couldn't be
-     *  downloaded — retries once automatically since a single failed attempt on a large file
-     *  isn't necessarily a permanent problem. */
-    suspend fun resolveLocalFilePath(tdFileId: Int): String? {
+    /**
+     * Public entry point for playing a persisted TDLib track. Re-fetches the message fresh
+     * (using the stable chat/message ID) to get a *current* file ID before downloading — the
+     * raw file ID itself is only valid within one login session and would otherwise silently
+     * point at nothing after the app restarts and creates a new session.
+     */
+    suspend fun resolveLocalFilePathForMessage(chatId: Long, messageId: Long): String? {
+        val messageResult = sendForResult(
+            JSONObject().apply {
+                put("@type", "getMessage")
+                put("chat_id", chatId)
+                put("message_id", messageId)
+            },
+            timeoutMs = 15_000
+        ) ?: throw Exception("Couldn't find this message anymore")
+
+        if (messageResult.optString("@type") == "error") {
+            throw Exception(messageResult.optString("message", "Message no longer available"))
+        }
+
+        val content = messageResult.optJSONObject("content")
+        val audio = content?.optJSONObject("audio")
+        val fileObj = audio?.optJSONObject("audio")
+        val freshFileId = fileObj?.optInt("id", -1) ?: -1
+        if (freshFileId == -1) throw Exception("This track's audio is no longer available")
+
+        return downloadByFileId(freshFileId)
+    }
+
+    /** Downloads (if needed) and returns the local file path for a *current-session* file ID.
+     *  Retries once automatically since a single failed attempt on a large file isn't
+     *  necessarily a permanent problem. */
+    private suspend fun downloadByFileId(fileId: Int): String? {
         repeat(2) { attempt ->
             val result = sendForResult(
                 JSONObject().apply {
                     put("@type", "downloadFile")
-                    put("file_id", tdFileId)
+                    put("file_id", fileId)
                     put("priority", 1)
                     put("offset", 0)
                     put("limit", 0)
