@@ -11,8 +11,11 @@ data class Track(
     val dateAdded: Long,
     val isLocal: Boolean = false,
     val localUri: String? = null,
-    /** Set only for tracks pulled through the real-account TDLib login, not the bot. */
-    val tdFileId: Int? = null,
+    /** Stable identifiers for a TDLib-account-sourced track. TDLib's raw file IDs are only
+     *  valid for one login session, so we resolve a fresh one from these right before playing
+     *  instead of persisting the ephemeral file ID itself. */
+    val tdChatId: Long? = null,
+    val tdMessageId: Long? = null,
     /** e.g. "192kbps" or "FLAC" — best-effort, shown in the library list. */
     val qualityLabel: String? = null
 )
