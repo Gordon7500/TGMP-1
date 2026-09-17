@@ -57,6 +57,7 @@ class PlaybackService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        com.tuned.app.audio.FfmpegFallbackDecoder.cleanupOldTempFiles(applicationContext)
         store = Store(applicationContext)
         effects = AudioEffectsController(store)
         engine = AudioEngine(
