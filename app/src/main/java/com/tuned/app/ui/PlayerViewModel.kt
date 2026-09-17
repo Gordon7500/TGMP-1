@@ -154,14 +154,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun onSearchQueryChanged(query: String) {
         searchJob?.cancel()
         if (query.isBlank()) return
-        val auth = com.tuned.app.telegram.TdLibSessionManager.auth ?: return
+        val auth = com.tuned.app.telegram.TdLibSessionManager.auth ?: run {
+            _state.value = _state.value.copy(statusMessage = "Log into your Telegram account in Settings to search it.")
+            return
+        }
         searchJob = viewModelScope.launch {
             kotlinx.coroutines.delay(500)
+            _state.value = _state.value.copy(statusMessage = "Searching your Telegram account…")
             try {
                 val results = auth.searchAudioByQuery(query)
-                if (results.isNotEmpty()) addTelegramAccountTracks(results)
-            } catch (_: Exception) {
-                // Live search is best-effort — a failed attempt shouldn't interrupt typing.
+                if (results.isNotEmpty()) {
+                    addTelegramAccountTracks(results)
+                    _state.value = _state.value.copy(statusMessage = null)
+                } else {
+                    _state.value = _state.value.copy(statusMessage = "No matches found on your Telegram account.")
+                }
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(statusMessage = "Search failed: ${e.message}")
             }
         }
     }
