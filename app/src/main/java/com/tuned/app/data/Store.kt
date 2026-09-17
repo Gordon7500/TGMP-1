@@ -55,8 +55,12 @@ class Store(context: Context) {
     var equalizerBandLevels: List<Int>
         get() {
             val raw = prefs.getString("eq_bands", "[]") ?: "[]"
-            val arr = JSONArray(raw)
-            return (0 until arr.length()).map { arr.getInt(it) }
+            return try {
+                val arr = JSONArray(raw)
+                (0 until arr.length()).map { arr.optInt(it, 0) }
+            } catch (_: Exception) {
+                emptyList()
+            }
         }
         set(value) {
             val arr = JSONArray()
@@ -76,8 +80,12 @@ class Store(context: Context) {
     var channels: List<String>
         get() {
             val raw = prefs.getString("channels", "[]") ?: "[]"
-            val arr = JSONArray(raw)
-            return (0 until arr.length()).map { arr.getString(it) }
+            return try {
+                val arr = JSONArray(raw)
+                (0 until arr.length()).mapNotNull { arr.optString(it, null) }
+            } catch (_: Exception) {
+                emptyList()
+            }
         }
         set(value) {
             val arr = JSONArray()
@@ -88,23 +96,27 @@ class Store(context: Context) {
     var tracks: List<Track>
         get() {
             val raw = prefs.getString("tracks", "[]") ?: "[]"
-            val arr = JSONArray(raw)
-            return (0 until arr.length()).map { i ->
-                val o = arr.getJSONObject(i)
-                Track(
-                    fileId = o.getString("fileId"),
-                    fileUniqueId = o.getString("fileUniqueId"),
-                    title = o.getString("title"),
-                    artist = o.getString("artist"),
-                    durationSec = o.optInt("durationSec", 0),
-                    thumbFileId = o.optString("thumbFileId", null.toString()).takeIf { it != "null" },
-                    sourceChat = o.optString("sourceChat", ""),
-                    dateAdded = o.optLong("dateAdded", 0L),
-                    tdChatId = if (o.has("tdChatId") && !o.isNull("tdChatId")) o.getLong("tdChatId") else null,
-                    tdMessageId = if (o.has("tdMessageId") && !o.isNull("tdMessageId")) o.getLong("tdMessageId") else null,
-                    qualityLabel = o.optString("qualityLabel", null.toString()).takeIf { it != "null" }
-                )
-            }
+            val arr = try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
+            return (0 until arr.length()).mapNotNull { i ->
+                try {
+                    val o = arr.getJSONObject(i)
+                    Track(
+                        fileId = o.optString("fileId", ""),
+                        fileUniqueId = o.optString("fileUniqueId", ""),
+                        title = o.optString("title", "Untitled"),
+                        artist = o.optString("artist", "Unknown artist"),
+                        durationSec = o.optInt("durationSec", 0),
+                        thumbFileId = o.optString("thumbFileId", null.toString()).takeIf { it != "null" },
+                        sourceChat = o.optString("sourceChat", ""),
+                        dateAdded = o.optLong("dateAdded", 0L),
+                        tdChatId = if (o.has("tdChatId") && !o.isNull("tdChatId")) o.optLong("tdChatId") else null,
+                        tdMessageId = if (o.has("tdMessageId") && !o.isNull("tdMessageId")) o.optLong("tdMessageId") else null,
+                        qualityLabel = o.optString("qualityLabel", null.toString()).takeIf { it != "null" }
+                    )
+                } catch (_: Exception) {
+                    null // skip this one malformed entry rather than crashing the whole app on every launch
+                }
+            }.filter { it.fileUniqueId.isNotBlank() } // a track with no identity at all is unusable anyway
         }
         set(value) {
             val arr = JSONArray()
