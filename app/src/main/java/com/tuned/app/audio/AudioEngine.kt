@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.*
 import android.net.Uri
 import kotlinx.coroutines.*
+import java.io.File
 import java.nio.ByteBuffer
 
 /**
@@ -87,7 +88,37 @@ class AudioEngine(
         state = State.IDLE
     }
 
-    private suspend fun playInternal(url: String, directOutputPreferred: Boolean, usbExclusiveEnabled: Boolean) {
+    private data class DecodeSetup(
+        val extractor: MediaExtractor,
+        val codec: MediaCodec,
+        val format: MediaFormat,
+        val mime: String,
+        val sourceSampleRate: Int,
+        val sourceChannels: Int,
+        val durationMs: Long
+    )
+
+    /** Opens [url] for decoding, falling back to an FFmpeg-transcoded WAV copy if Android has no
+     *  native decoder for this format at all (DSD/DSF, WavPack, and — on most phones — ALAC). */
+    private fun openForDecode(url: String, isRetry: Boolean = false): DecodeSetup {
+        val skipNativeAttempt = !isRetry &&
+            FfmpegFallbackDecoder.extensionOf(url) in FfmpegFallbackDecoder.KNOWN_UNSUPPORTED_EXTENSIONS
+
+        if (!skipNativeAttempt) {
+            try {
+                return openNatively(url)
+            } catch (e: Exception) {
+                if (isRetry) throw e // already tried the transcoded copy; give up for real
+            }
+        }
+
+        val wavPath = File(context.cacheDir, "tuned_fallback_${System.currentTimeMillis()}.wav").absolutePath
+        val ok = FfmpegFallbackDecoder.transcodeToWav(context, url, wavPath)
+        if (!ok) throw IllegalStateException("This format isn't supported, and converting it failed too")
+        return openForDecode(wavPath, isRetry = true)
+    }
+
+    private fun openNatively(url: String): DecodeSetup {
         val extractor = MediaExtractor()
         if (url.startsWith("content://")) {
             extractor.setDataSource(context, Uri.parse(url), null)
@@ -107,6 +138,7 @@ class AudioEngine(
             }
         }
         if (trackIndex == -1 || format == null) {
+            extractor.release()
             throw IllegalStateException("No audio track found in stream")
         }
         extractor.selectTrack(trackIndex)
@@ -114,12 +146,29 @@ class AudioEngine(
         val mime = format.getString(MediaFormat.KEY_MIME)!!
         val sourceSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
         val sourceChannels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-        currentDurationMs = if (format.containsKey(MediaFormat.KEY_DURATION))
+        val durationMs = if (format.containsKey(MediaFormat.KEY_DURATION))
             format.getLong(MediaFormat.KEY_DURATION) / 1000 else 0
 
-        val codec = MediaCodec.createDecoderByType(mime)
+        val codec = try {
+            MediaCodec.createDecoderByType(mime)
+        } catch (e: Exception) {
+            extractor.release()
+            throw e
+        }
         codec.configure(format, null, null, 0)
         codec.start()
+
+        return DecodeSetup(extractor, codec, format, mime, sourceSampleRate, sourceChannels, durationMs)
+    }
+
+    private suspend fun playInternal(url: String, directOutputPreferred: Boolean, usbExclusiveEnabled: Boolean) {
+        val setup = openForDecode(url)
+        val extractor = setup.extractor
+        val codec = setup.codec
+        val format = setup.format
+        val sourceSampleRate = setup.sourceSampleRate
+        val sourceChannels = setup.sourceChannels
+        currentDurationMs = setup.durationMs
 
         val channelConfig = if (sourceChannels >= 2) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
 
