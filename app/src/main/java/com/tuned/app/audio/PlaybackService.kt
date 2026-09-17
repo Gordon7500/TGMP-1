@@ -190,6 +190,11 @@ class PlaybackService : Service() {
         _state.value = _state.value.copy(isPlaying = s == AudioEngine.State.PLAYING)
         updatePlaybackState()
         if (s == AudioEngine.State.ENDED) skipNext()
+        if (s == AudioEngine.State.ERROR) {
+            _state.value = _state.value.copy(
+                statusMessage = "This file's format isn't supported on this device."
+            )
+        }
         updateNotification()
     }
 
