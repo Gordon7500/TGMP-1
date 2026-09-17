@@ -107,4 +107,5 @@ dependencies {
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.media:media:1.7.0")
+    implementation("dev.ffmpegkit-maintained:ffmpeg-kit-free:6.0.2")
 }
