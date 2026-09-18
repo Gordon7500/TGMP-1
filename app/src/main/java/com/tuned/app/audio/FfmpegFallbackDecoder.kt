@@ -29,12 +29,17 @@ object FfmpegFallbackDecoder {
      * original quality, not homogenizing it.
      */
     fun transcodeToWav(context: Context, inputPath: String, outputPath: String): Boolean {
-        val resolvedInput = resolveToLocalPath(context, inputPath) ?: return false
-
-        val session = FFmpegKit.execute(
-            "-y -i \"$resolvedInput\" -vn -map 0:a:0 -c:a pcm_s16le \"$outputPath\""
-        )
-        return ReturnCode.isSuccess(session.returnCode) && File(outputPath).length() > 0
+        return try {
+            val resolvedInput = resolveToLocalPath(context, inputPath) ?: return false
+            val session = FFmpegKit.execute(
+                "-y -i \"$resolvedInput\" -vn -map 0:a:0 -c:a pcm_s16le \"$outputPath\""
+            )
+            ReturnCode.isSuccess(session.returnCode) && File(outputPath).length() > 0
+        } catch (_: Throwable) {
+            // Covers both real failures and library-loading problems (which surface as an
+            // Error, not an Exception, and would otherwise bypass normal exception handling).
+            false
+        }
     }
 
     /** FFmpeg's file protocol can't read Android's content:// URIs directly — copy to a plain
@@ -68,7 +73,7 @@ object FfmpegFallbackDecoder {
                     f.delete()
                 }
             }
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
     }
 }
