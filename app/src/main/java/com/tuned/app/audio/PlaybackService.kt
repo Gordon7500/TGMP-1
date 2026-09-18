@@ -57,7 +57,12 @@ class PlaybackService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        com.tuned.app.audio.FfmpegFallbackDecoder.cleanupOldTempFiles(applicationContext)
+        try {
+            com.tuned.app.audio.FfmpegFallbackDecoder.cleanupOldTempFiles(applicationContext)
+        } catch (_: Throwable) {
+            // Never let cleanup — or anything related to the FFmpeg fallback library — take
+            // down app startup. Worst case here is a few leftover temp files, not a crash loop.
+        }
         store = Store(applicationContext)
         effects = AudioEffectsController(store)
         engine = AudioEngine(
